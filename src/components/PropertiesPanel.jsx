@@ -161,6 +161,22 @@ function PropertiesPanel({
           </button>
 
           <button
+            onClick={() => {
+              const newObject = {
+                ...selectedObject,
+                id: Date.now(),
+                x: selectedObject.x + 100, // Offset by 100mm
+                y: selectedObject.y + 100
+              };
+              setObjects([...objects, newObject]);
+              setSelectedObjectId(newObject.id);
+            }}
+            style={{ width: '100%', padding: '5px', marginBottom: '10px', backgroundColor: '#e6f7ff', border: '1px solid #1890ff', cursor: 'pointer', color: '#1890ff' }}
+          >
+            複製 (Copy)
+          </button>
+
+          <button
             className="delete-btn"
             onClick={() => {
               setObjects(objects.filter(o => o.id !== selectedObject.id));
