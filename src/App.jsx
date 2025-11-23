@@ -5,6 +5,7 @@ import PropertiesPanel from './components/PropertiesPanel';
 import { mmToPx, pxToMm, snapToGrid, calculateArea, GRID_SIZE_MM } from './utils/units';
 import { ROOM_TYPES, OBJECT_TYPES } from './constants';
 import ObjectRenderer from './components/ObjectRenderer';
+import DimensionAnnotations from './components/DimensionAnnotations';
 import './index.css';
 
 function App() {
@@ -890,6 +891,13 @@ function App() {
                 onObjectMouseDown={handleObjectMouseDown}
               />
             ))}
+
+            {/* Dimension Annotations */}
+            <DimensionAnnotations
+              walls={walls}
+              scale={scale}
+              pan={pan}
+            />
 
             {currentWall && (
               <line
