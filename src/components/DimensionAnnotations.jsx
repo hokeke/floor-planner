@@ -128,6 +128,55 @@ const DimensionAnnotations = ({ walls, scale, pan }) => {
 
   console.log('Total annotations:', annotations.length);
 
+  // Add overall building dimensions (outside the segment dimensions)
+  const OVERALL_OFFSET = DIMENSION_OFFSET * 2; // Place overall dimensions further out
+
+  // Overall width at top
+  annotations.push({
+    type: 'horizontal',
+    x1: minX,
+    x2: maxX,
+    y: minY - OVERALL_OFFSET,
+    wallY: minY,
+    length: maxX - minX,
+    isOverall: true
+  });
+
+  // Overall width at bottom
+  annotations.push({
+    type: 'horizontal',
+    x1: minX,
+    x2: maxX,
+    y: maxY + OVERALL_OFFSET,
+    wallY: maxY,
+    length: maxX - minX,
+    isOverall: true
+  });
+
+  // Overall height at left
+  annotations.push({
+    type: 'vertical',
+    y1: minY,
+    y2: maxY,
+    x: minX - OVERALL_OFFSET,
+    wallX: minX,
+    length: maxY - minY,
+    isOverall: true
+  });
+
+  // Overall height at right
+  annotations.push({
+    type: 'vertical',
+    y1: minY,
+    y2: maxY,
+    x: maxX + OVERALL_OFFSET,
+    wallX: maxX,
+    length: maxY - minY,
+    isOverall: true
+  });
+
+  console.log('Total with overall:', annotations.length);
+
   return (
     <g className="dimension-annotations">
       {annotations.map((ann, idx) => {
