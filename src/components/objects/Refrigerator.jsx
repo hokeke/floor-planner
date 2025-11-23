@@ -5,23 +5,7 @@ const Refrigerator = ({ width, height, scale }) => {
   // The SVG coordinates are roughly -25 to 25.
   // We'll use a viewBox of -26 -21 52 42 to cover the drawing area.
 
-  return (
-    <g transform={`scale(${width / 52}, ${height / 42})`}>
-      <g id="Layer0_0_FILL_fur12_01">
-        <path fill="#FFFFFF" stroke="none" d="
-M 25 17.05
-L 0 -1.75 -25 17.05 25 17.05
-M -25 -20.5
-L -25 17.05 0 -1.75 -25 -20.5
-M -25 17.05
-L -25 20.5 25 20.5 25 17.05 -25 17.05
-M 0 -1.75
-L 25 -20.5 -25 -20.5 0 -1.75
-M 25 -20.5
-L 0 -1.75 25 17.05 25 -20.5 Z"></path>
-      </g>
-      <g id="Layer0_0_STROKES_1_FILL_fur12_01">
-        <path fill="#666666" stroke="none" d="
+  const detailPath = `
 M -25.2 19.75
 Q -25.24921875 19.847265625 -25.25 19.95
 L -25.25 20.5
@@ -257,7 +241,30 @@ Q -25.24921875 -18.8474609375 -25.2 -18.8 -25.102734375 -18.7009765625 -25 -18.7
 L -24.75 -20 -23.55 -19.1
 Q -23.4720703125 -19.03671875 -23.4 -19.05 -23.267578125 -19.0658203125 -23.2 -19.15 -23.1365234375 -19.2279296875 -23.15 -19.35 -23.166015625 -19.432421875 -23.25 -19.5
 L -24.25 -20.25 -23 -20.25
-"></path>
+  `;
+
+  return (
+    <g transform={`scale(${width / 52}, ${height / 42})`}>
+      {/* Add solid white background to prevent transparency issues */}
+      <rect x="-26" y="-21" width="52" height="42" fill="#FFFFFF" />
+      <g id="Layer0_0_FILL_fur12_01">
+        <path fill="#FFFFFF" stroke="none" d="
+M 25 17.05
+L 0 -1.75 -25 17.05 25 17.05
+M -25 -20.5
+L -25 17.05 0 -1.75 -25 -20.5
+M -25 17.05
+L -25 20.5 25 20.5 25 17.05 -25 17.05
+M 0 -1.75
+L 25 -20.5 -25 -20.5 0 -1.75
+M 25 -20.5
+L 0 -1.75 25 17.05 25 -20.5 Z"></path>
+      </g>
+      <g id="Layer0_0_STROKES_1_FILL_fur12_01" transform="translate(0.8, 0)">
+        <path fill="#666666" stroke="none" d={detailPath}></path>
+      </g>
+      <g id="Layer0_0_STROKES_1_FILL_fur12_01_mirror" transform="scale(-1, 1) translate(0.8, 0)">
+        <path fill="#666666" stroke="none" d={detailPath}></path>
       </g>
     </g>
   );
