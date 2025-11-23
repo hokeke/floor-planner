@@ -36,7 +36,40 @@ function App() {
   const [interactionMode, setInteractionMode] = useState(null); // 'move', 'resize', 'rotate'
   const [interactionData, setInteractionData] = useState(null); // { startX, startY, initialObjectState, handle }
 
+  // Room edge resizing state
+  const [hoveredRoomEdge, setHoveredRoomEdge] = useState(null); // { roomId, edgeIndex }
+  const [draggingRoomEdge, setDraggingRoomEdge] = useState(null); // { roomId, edgeIndex, startPos: {x,y}, originalPoints: [] }
+
   const svgRef = useRef(null);
+
+  // Helper to calculate distance from point P to line segment AB
+  const getDistanceToLineSegment = (P, A, B) => {
+    const l2 = (A.x - B.x) ** 2 + (A.y - B.y) ** 2;
+    if (l2 === 0) return Math.sqrt((P.x - A.x) ** 2 + (P.y - A.y) ** 2);
+    let t = ((P.x - A.x) * (B.x - A.x) + (P.y - A.y) * (B.y - A.y)) / l2;
+    t = Math.max(0, Math.min(1, t));
+    const proj = { x: A.x + t * (B.x - A.x), y: A.y + t * (B.y - A.y) };
+    return Math.sqrt((P.x - proj.x) ** 2 + (P.y - proj.y) ** 2);
+  };
+
+  // Helper to find closest room edge
+  const getClosestRoomEdge = (point) => {
+    let closestEdge = null;
+    let minDistance = 10 / scale; // Threshold in pixels (adjusted by scale)
+
+    rooms.forEach(room => {
+      room.points.forEach((p1, i) => {
+        const p2 = room.points[(i + 1) % room.points.length];
+        const dist = getDistanceToLineSegment(point, p1, p2);
+        if (dist < minDistance) {
+          minDistance = dist;
+          closestEdge = { roomId: room.id, edgeIndex: i };
+        }
+      });
+    });
+
+    return closestEdge;
+  };
 
   // Coordinate transformation
   const screenToWorld = (screenX, screenY) => {
@@ -117,6 +150,7 @@ function App() {
           } else {
             // Add point
             setCurrentRoom(prev => ({
+              ...prev,
               points: [...prev.points, newPoint]
             }));
           }
@@ -320,6 +354,26 @@ function App() {
 
         const clickedRoom = rooms.find(r => isPointInPolygon(worldPos, r.points));
 
+        if (hoveredRoomEdge) {
+          const room = rooms.find(r => r.id === hoveredRoomEdge.roomId);
+          if (room) {
+            // Use finer grid for edge dragging start position to match movement
+            const edgeStartX = snapToGrid(worldPos.x, GRID_SIZE_MM / 8);
+            const edgeStartY = snapToGrid(worldPos.y, GRID_SIZE_MM / 8);
+
+            setDraggingRoomEdge({
+              roomId: hoveredRoomEdge.roomId,
+              edgeIndex: hoveredRoomEdge.edgeIndex,
+              startPos: { x: edgeStartX, y: edgeStartY },
+              originalPoints: [...room.points]
+            });
+            setSelectedRoomId(null);
+            setSelectedWallId(null);
+            setSelectedObjectId(null);
+            return; // Prevent further click handling if an edge is being dragged
+          }
+        }
+
         if (clickedRoom) {
           setSelectedRoomId(clickedRoom.id);
           setSelectedWallId(null);
@@ -353,6 +407,13 @@ function App() {
 
     const worldPos = screenToWorld(x, y);
     setMousePos(worldPos); // Update for rubber band
+
+    if (!draggingRoomEdge && !draggingRoomId && !draggingWallId && !interactionMode && tool === 'select') {
+      const closestEdge = getClosestRoomEdge(worldPos);
+      setHoveredRoomEdge(closestEdge);
+    } else {
+      setHoveredRoomEdge(null);
+    }
 
     if (isDrawing && tool === 'wall' && currentWall) {
       const snappedX = snapToGrid(worldPos.x, GRID_SIZE_MM / 2);
@@ -645,6 +706,52 @@ function App() {
       }));
     }
 
+    if (draggingRoomEdge) {
+      const snappedX = snapToGrid(worldPos.x, GRID_SIZE_MM / 8);
+      const snappedY = snapToGrid(worldPos.y, GRID_SIZE_MM / 8);
+
+      const dx = snappedX - draggingRoomEdge.startPos.x;
+      const dy = snappedY - draggingRoomEdge.startPos.y;
+
+      if (dx !== 0 || dy !== 0) {
+        setRooms(rooms.map(room => {
+          if (room.id === draggingRoomEdge.roomId) {
+            const newPoints = [...draggingRoomEdge.originalPoints];
+            const i = draggingRoomEdge.edgeIndex;
+            const nextI = (i + 1) % newPoints.length;
+
+            // Calculate edge vector and normal
+            const p1 = draggingRoomEdge.originalPoints[i];
+            const p2 = draggingRoomEdge.originalPoints[nextI];
+            const edgeDx = p2.x - p1.x;
+            const edgeDy = p2.y - p1.y;
+
+            // Normal vector (-dy, dx)
+            let nx = -edgeDy;
+            let ny = edgeDx;
+            const len = Math.sqrt(nx * nx + ny * ny);
+            if (len > 0) {
+              nx /= len;
+              ny /= len;
+            }
+
+            // Project delta onto normal
+            const dot = dx * nx + dy * ny;
+            const projDx = dot * nx;
+            const projDy = dot * ny;
+
+            // Move the two points forming the edge by the projected delta
+            newPoints[i] = { x: p1.x + projDx, y: p1.y + projDy };
+            newPoints[nextI] = { x: p2.x + projDx, y: p2.y + projDy };
+
+            return { ...room, points: newPoints };
+          }
+          return room;
+        }));
+      }
+      return;
+    }
+
     if (draggingRoomId && dragStartPos) {
       const snappedX = snapToGrid(worldPos.x, GRID_SIZE_MM / 2);
       const snappedY = snapToGrid(worldPos.y, GRID_SIZE_MM / 2);
@@ -689,13 +796,10 @@ function App() {
     }
   };
 
-  const handleMouseUp = (e) => {
-
-
+  const handleMouseUp = () => {
     if (isPanning) {
       setIsPanning(false);
       setLastMousePos(null);
-      return;
     }
 
     if (draggingRoomId) {
@@ -705,6 +809,10 @@ function App() {
 
     if (draggingWallId) {
       setDraggingWallId(null);
+    }
+
+    if (draggingRoomEdge) {
+      setDraggingRoomEdge(null);
     }
 
     // Reset interaction mode after rotate or resize completes
@@ -1042,6 +1150,19 @@ function App() {
                       fill="none"
                       stroke="orange"
                       strokeWidth={3 / scale}
+                    />
+                  )}
+                  {/* Highlight hovered edge */}
+                  {hoveredRoomEdge && hoveredRoomEdge.roomId === room.id && (
+                    <line
+                      x1={room.points[hoveredRoomEdge.edgeIndex].x}
+                      y1={room.points[hoveredRoomEdge.edgeIndex].y}
+                      x2={room.points[(hoveredRoomEdge.edgeIndex + 1) % room.points.length].x}
+                      y2={room.points[(hoveredRoomEdge.edgeIndex + 1) % room.points.length].y}
+                      stroke="blue"
+                      strokeWidth={4 / scale}
+                      strokeLinecap="round"
+                      pointerEvents="none"
                     />
                   )}
                 </g>
