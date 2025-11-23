@@ -53,19 +53,41 @@ function App() {
   };
 
   // Helper to find closest room edge
-  const getClosestRoomEdge = (point) => {
+  // Helper to find closest room edge
+  const getClosestRoomEdge = (point, preferredRoomId = null) => {
     let closestEdge = null;
     let minDistance = 10 / scale; // Threshold in pixels (adjusted by scale)
 
-    rooms.forEach(room => {
+    // Helper to check edges of a specific room
+    const checkRoomEdges = (room) => {
+      let found = null;
       room.points.forEach((p1, i) => {
         const p2 = room.points[(i + 1) % room.points.length];
         const dist = getDistanceToLineSegment(point, p1, p2);
         if (dist < minDistance) {
           minDistance = dist;
-          closestEdge = { roomId: room.id, edgeIndex: i };
+          found = { roomId: room.id, edgeIndex: i };
         }
       });
+      return found;
+    };
+
+    // Check preferred room first
+    if (preferredRoomId) {
+      const preferredRoom = rooms.find(r => r.id === preferredRoomId);
+      if (preferredRoom) {
+        const found = checkRoomEdges(preferredRoom);
+        if (found) return found;
+      }
+    }
+
+    // Check all rooms
+    rooms.forEach(room => {
+      // Skip preferred room as it was already checked
+      if (room.id === preferredRoomId) return;
+
+      const found = checkRoomEdges(room);
+      if (found) closestEdge = found;
     });
 
     return closestEdge;
@@ -293,6 +315,27 @@ function App() {
           return;
         }
 
+        // Check for room edge dragging first (priority over walls and rooms)
+        if (hoveredRoomEdge) {
+          const room = rooms.find(r => r.id === hoveredRoomEdge.roomId);
+          if (room) {
+            // Use finer grid for edge dragging start position to match movement
+            const edgeStartX = snapToGrid(worldPos.x, GRID_SIZE_MM / 8);
+            const edgeStartY = snapToGrid(worldPos.y, GRID_SIZE_MM / 8);
+
+            setDraggingRoomEdge({
+              roomId: hoveredRoomEdge.roomId,
+              edgeIndex: hoveredRoomEdge.edgeIndex,
+              startPos: { x: edgeStartX, y: edgeStartY },
+              originalPoints: [...room.points]
+            });
+            setSelectedRoomId(null);
+            setSelectedWallId(null);
+            setSelectedObjectId(null);
+            return; // Prevent further click handling if an edge is being dragged
+          }
+        }
+
         // Check for wall click first (priority over rooms)
         const isPointNearLine = (point, start, end, threshold = 10) => {
           const A = point.x - start.x;
@@ -354,26 +397,6 @@ function App() {
 
         const clickedRoom = rooms.find(r => isPointInPolygon(worldPos, r.points));
 
-        if (hoveredRoomEdge) {
-          const room = rooms.find(r => r.id === hoveredRoomEdge.roomId);
-          if (room) {
-            // Use finer grid for edge dragging start position to match movement
-            const edgeStartX = snapToGrid(worldPos.x, GRID_SIZE_MM / 8);
-            const edgeStartY = snapToGrid(worldPos.y, GRID_SIZE_MM / 8);
-
-            setDraggingRoomEdge({
-              roomId: hoveredRoomEdge.roomId,
-              edgeIndex: hoveredRoomEdge.edgeIndex,
-              startPos: { x: edgeStartX, y: edgeStartY },
-              originalPoints: [...room.points]
-            });
-            setSelectedRoomId(null);
-            setSelectedWallId(null);
-            setSelectedObjectId(null);
-            return; // Prevent further click handling if an edge is being dragged
-          }
-        }
-
         if (clickedRoom) {
           setSelectedRoomId(clickedRoom.id);
           setSelectedWallId(null);
@@ -409,7 +432,7 @@ function App() {
     setMousePos(worldPos); // Update for rubber band
 
     if (!draggingRoomEdge && !draggingRoomId && !draggingWallId && !interactionMode && tool === 'select') {
-      const closestEdge = getClosestRoomEdge(worldPos);
+      const closestEdge = getClosestRoomEdge(worldPos, selectedRoomId);
       setHoveredRoomEdge(closestEdge);
     } else {
       setHoveredRoomEdge(null);
@@ -1130,28 +1153,19 @@ function App() {
           <rect width="100%" height="100%" fill="url(#grid)" pointerEvents="none" />
 
           <g transform={`translate(${pan.x}, ${pan.y}) scale(${scale})`}>
-            {rooms.map(room => {
+            {/* Render UNSELECTED rooms first (Background) */}
+            {rooms.filter(r => r.id !== selectedRoomId).map(room => {
               const pointsStr = room.points.map(p => `${p.x},${p.y}`).join(' ');
-              const isSelected = room.id === selectedRoomId;
               const roomType = ROOM_TYPES.find(t => t.id === room.type) || ROOM_TYPES[1]; // Default to Western
 
               return (
                 <g key={room.id}>
                   <polygon
                     points={pointsStr}
-                    fill={isSelected ? "rgba(100, 149, 237, 0.5)" : roomType.color}
-                    fillOpacity={isSelected ? 0.5 : 0.8}
+                    fill={roomType.color}
+                    fillOpacity={0.8}
                     stroke="none"
                   />
-                  {/* Removed stroke from polygon, only show selection highlight if needed, or rely on fill */}
-                  {isSelected && (
-                    <polygon
-                      points={pointsStr}
-                      fill="none"
-                      stroke="orange"
-                      strokeWidth={3 / scale}
-                    />
-                  )}
                   {/* Highlight hovered edge */}
                   {hoveredRoomEdge && hoveredRoomEdge.roomId === room.id && (
                     <line
@@ -1174,7 +1188,7 @@ function App() {
               const typeDef = OBJECT_TYPES.find(t => t.id === obj.type);
               // Render if it's a custom object (no typeDef) or if it's not an opening
               return !typeDef || typeDef.type !== 'opening';
-            }).map(obj => (
+            }).sort((a, b) => (a.id === selectedObjectId ? 1 : b.id === selectedObjectId ? -1 : 0)).map(obj => (
               <ObjectRenderer
                 key={obj.id}
                 obj={obj}
@@ -1186,7 +1200,7 @@ function App() {
             ))}
 
             {/* Walls */}
-            {walls.map(wall => {
+            {[...walls].sort((a, b) => (a.id === selectedWallId ? 1 : b.id === selectedWallId ? -1 : 0)).map(wall => {
               const isSelected = wall.id === selectedWallId;
               return (
                 <line
@@ -1206,7 +1220,7 @@ function App() {
             {objects.filter(obj => {
               const typeDef = OBJECT_TYPES.find(t => t.id === obj.type);
               return typeDef && typeDef.type === 'opening';
-            }).map(obj => (
+            }).sort((a, b) => (a.id === selectedObjectId ? 1 : b.id === selectedObjectId ? -1 : 0)).map(obj => (
               <ObjectRenderer
                 key={obj.id}
                 obj={obj}
@@ -1216,6 +1230,43 @@ function App() {
                 onObjectMouseDown={handleObjectMouseDown}
               />
             ))}
+
+            {/* Render SELECTED room last (Foreground, on top of walls) */}
+            {rooms.filter(r => r.id === selectedRoomId).map(room => {
+              const pointsStr = room.points.map(p => `${p.x},${p.y}`).join(' ');
+              const roomType = ROOM_TYPES.find(t => t.id === room.type) || ROOM_TYPES[1];
+
+              return (
+                <g key={room.id}>
+                  <polygon
+                    points={pointsStr}
+                    fill="rgba(100, 149, 237, 0.5)"
+                    fillOpacity={0.5}
+                    stroke="none"
+                  />
+                  {/* Selection highlight */}
+                  <polygon
+                    points={pointsStr}
+                    fill="none"
+                    stroke="orange"
+                    strokeWidth={3 / scale}
+                  />
+                  {/* Highlight hovered edge */}
+                  {hoveredRoomEdge && hoveredRoomEdge.roomId === room.id && (
+                    <line
+                      x1={room.points[hoveredRoomEdge.edgeIndex].x}
+                      y1={room.points[hoveredRoomEdge.edgeIndex].y}
+                      x2={room.points[(hoveredRoomEdge.edgeIndex + 1) % room.points.length].x}
+                      y2={room.points[(hoveredRoomEdge.edgeIndex + 1) % room.points.length].y}
+                      stroke="blue"
+                      strokeWidth={4 / scale}
+                      strokeLinecap="round"
+                      pointerEvents="none"
+                    />
+                  )}
+                </g>
+              );
+            })}
 
             {/* Room Labels (Rendered ABOVE everything) */}
             {rooms.map(room => {
