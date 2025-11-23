@@ -96,6 +96,21 @@ function PropertiesPanel({
           <p>Type: {OBJECT_TYPES.find(t => t.id === selectedObject.type)?.label}</p>
 
           <label style={{ display: 'block', marginTop: '10px', marginBottom: '5px' }}>
+            ラベル (Label):
+          </label>
+          <input
+            type="text"
+            value={selectedObject.label || ''}
+            onChange={(e) => {
+              setObjects(objects.map(o =>
+                o.id === selectedObject.id ? { ...o, label: e.target.value } : o
+              ));
+            }}
+            placeholder="例: 冷蔵庫 (Ex: Fridge)"
+            style={{ width: '100%', padding: '5px', marginBottom: '10px' }}
+          />
+
+          <label style={{ display: 'block', marginTop: '10px', marginBottom: '5px' }}>
             幅 (Width): {selectedObject.width} mm
           </label>
           <input

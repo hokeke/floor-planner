@@ -96,6 +96,20 @@ const ObjectRenderer = ({ obj, isSelected, scale, onHandleMouseDown, onObjectMou
       style={{ cursor: 'move' }}
     >
       {renderObjectContent()}
+      {obj.label && (
+        <text
+          x={0}
+          y={0}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fontSize={12 / scale}
+          fill="#333"
+          pointerEvents="none"
+          style={{ userSelect: 'none' }}
+        >
+          {obj.label}
+        </text>
+      )}
       {isSelected && (
         <g>
           <rect x={-widthPx / 2 - 5} y={-heightPx / 2 - 5} width={widthPx + 10} height={heightPx + 10} fill="none" stroke="blue" strokeWidth={2 / scale} strokeDasharray="5,5" />
