@@ -55,6 +55,19 @@ const ObjectRenderer = ({ obj, isSelected, scale, onHandleMouseDown, onObjectMou
         return <Table width={widthPx} height={heightPx} scale={scale} />;
       case 'refrigerator':
         return <Refrigerator width={widthPx} height={heightPx} scale={scale} />;
+      case 'custom':
+        if (obj.points) {
+          const pointsStr = obj.points.map(p => `${mmToPx(p.x)},${mmToPx(p.y)}`).join(' ');
+          return (
+            <polygon
+              points={pointsStr}
+              fill="#e0e0e0"
+              stroke="#666"
+              strokeWidth="2"
+            />
+          );
+        }
+        return null;
       default:
         return (
           <rect

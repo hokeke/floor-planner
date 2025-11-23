@@ -52,6 +52,13 @@ function Toolbar({
         >
           壁作成 (Wall)
         </button>
+        <button
+          className={tool === 'custom_object' ? 'active' : ''}
+          onClick={() => setTool('custom_object')}
+          style={{ padding: '8px 12px', cursor: 'pointer', backgroundColor: tool === 'custom_object' ? '#ddd' : '#f0f0f0', border: '1px solid #ccc', borderRadius: '4px' }}
+        >
+          多角形 (Polygon)
+        </button>
         <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
           <button
             className={tool === 'object' ? 'active' : ''}

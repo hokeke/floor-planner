@@ -13,6 +13,7 @@ function App() {
   const [walls, setWalls] = useState([]); // [{ id, start: {x,y}, end: {x,y} }]
   const [objects, setObjects] = useState([]); // { id, type, x, y, width, height, rotation }
   const [currentRoom, setCurrentRoom] = useState(null); // { points: [{x,y}, ...] }
+  const [currentCustomObject, setCurrentCustomObject] = useState(null); // { points: [{x,y}, ...] }
   const [currentWall, setCurrentWall] = useState(null); // { start: {x,y}, end: {x,y} }
   const [draggingWallId, setDraggingWallId] = useState(null);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -139,6 +140,62 @@ function App() {
           setCurrentWall(null);
           setIsDrawing(false);
           // Stay in wall tool
+        }
+      } else if (tool === 'custom_object') {
+        const newPoint = { x: snappedX, y: snappedY };
+
+        if (!isDrawing) {
+          setIsDrawing(true);
+          setCurrentCustomObject({
+            points: [newPoint]
+          });
+          setSelectedRoomId(null);
+          setSelectedWallId(null);
+          setSelectedObjectId(null);
+        } else {
+          // Check if clicked near start point to close loop
+          const startPoint = currentCustomObject.points[0];
+          const dist = Math.sqrt(Math.pow(newPoint.x - startPoint.x, 2) + Math.pow(newPoint.y - startPoint.y, 2));
+
+          if (currentCustomObject.points.length >= 3 && dist < mmToPx(200)) {
+            // Close loop and create object
+            const pointsPx = currentCustomObject.points;
+
+            // Calculate bounding box center
+            const minX = Math.min(...pointsPx.map(p => p.x));
+            const maxX = Math.max(...pointsPx.map(p => p.x));
+            const minY = Math.min(...pointsPx.map(p => p.y));
+            const maxY = Math.max(...pointsPx.map(p => p.y));
+            const centerX = (minX + maxX) / 2;
+            const centerY = (minY + maxY) / 2;
+
+            // Create relative points in mm
+            const relativePoints = pointsPx.map(p => ({
+              x: pxToMm(p.x - centerX),
+              y: pxToMm(p.y - centerY)
+            }));
+
+            const newObject = {
+              id: Date.now(),
+              type: 'custom',
+              x: pxToMm(centerX),
+              y: pxToMm(centerY),
+              width: pxToMm(maxX - minX), // Store dimensions for selection box
+              height: pxToMm(maxY - minY),
+              rotation: 0,
+              points: relativePoints
+            };
+
+            setObjects([...objects, newObject]);
+            setSelectedObjectId(newObject.id);
+            setCurrentCustomObject(null);
+            setIsDrawing(false);
+          } else {
+            // Add point
+            setCurrentCustomObject(prev => ({
+              points: [...prev.points, newPoint]
+            }));
+          }
         }
       } else if (tool === 'object') {
         const typeDef = OBJECT_TYPES.find(t => t.id === activeObjectType);
@@ -980,7 +1037,8 @@ function App() {
             {/* Objects (Furniture/Fixtures - Rendered BELOW walls) */}
             {objects.filter(obj => {
               const typeDef = OBJECT_TYPES.find(t => t.id === obj.type);
-              return typeDef && typeDef.type !== 'opening';
+              // Render if it's a custom object (no typeDef) or if it's not an opening
+              return !typeDef || typeDef.type !== 'opening';
             }).map(obj => (
               <ObjectRenderer
                 key={obj.id}
@@ -1093,6 +1151,27 @@ function App() {
                   x2={mousePos.x}
                   y2={mousePos.y}
                   stroke="royalblue"
+                  strokeWidth={1 / scale}
+                  strokeDasharray={`${5 / scale},${5 / scale}`}
+                />
+              </g>
+            )}
+
+            {currentCustomObject && (
+              <g>
+                <polyline
+                  points={currentCustomObject.points.map(p => `${p.x},${p.y}`).join(' ')}
+                  fill="none"
+                  stroke="#666"
+                  strokeWidth={2 / scale}
+                />
+                {/* Rubber band line */}
+                <line
+                  x1={currentCustomObject.points[currentCustomObject.points.length - 1].x}
+                  y1={currentCustomObject.points[currentCustomObject.points.length - 1].y}
+                  x2={mousePos.x}
+                  y2={mousePos.y}
+                  stroke="#666"
                   strokeWidth={1 / scale}
                   strokeDasharray={`${5 / scale},${5 / scale}`}
                 />
