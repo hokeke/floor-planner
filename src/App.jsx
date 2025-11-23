@@ -709,6 +709,49 @@ function App() {
     };
   }, [scale, pan]);
 
+  // Handle arrow key movement for selected objects
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (!selectedObjectId) return;
+
+      // Only handle arrow keys
+      if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) return;
+
+      e.preventDefault(); // Prevent page scrolling
+
+      const MOVE_STEP = mmToPx(GRID_SIZE_MM / 16); // Move by 1/16 grid (about 57mm)
+
+      setObjects(prevObjects =>
+        prevObjects.map(obj => {
+          if (obj.id !== selectedObjectId) return obj;
+
+          let newX = obj.x;
+          let newY = obj.y;
+
+          switch (e.key) {
+            case 'ArrowUp':
+              newY -= MOVE_STEP;
+              break;
+            case 'ArrowDown':
+              newY += MOVE_STEP;
+              break;
+            case 'ArrowLeft':
+              newX -= MOVE_STEP;
+              break;
+            case 'ArrowRight':
+              newX += MOVE_STEP;
+              break;
+          }
+
+          return { ...obj, x: newX, y: newY };
+        })
+      );
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedObjectId]);
+
   const selectedRoom = rooms.find(r => r.id === selectedRoomId);
   const selectedWall = walls.find(w => w.id === selectedWallId);
   const selectedObject = objects.find(o => o.id === selectedObjectId);
