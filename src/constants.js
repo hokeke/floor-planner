@@ -7,12 +7,13 @@ export const ROOM_TYPES = [
   { id: 'toilet', label: 'トイレ', color: '#E0FFFF' }, // Light Cyan
   { id: 'bath', label: '浴室', color: '#E0FFFF' }, // Light Cyan
   { id: 'wash', label: '洗面所', color: '#E0FFFF' }, // Light Cyan
-  { id: 'corridor', label: '廊下', color: '#F5F5F5' }, // White Smoke
+  { id: 'corridor', label: '廊下', color: '#E8E8E8' }, // Light Gray
 ];
 
 export const OBJECT_TYPES = [
   { id: 'door', label: 'ドア (Door)', width: 800, height: 800, type: 'opening' },
   { id: 'window', label: '引き違い窓 (Sliding Window)', width: 1600, height: 100, type: 'opening' },
+  { id: 'fix_window', label: 'Fix窓 (Fix Window)', width: 1600, height: 100, type: 'opening' },
   { id: 'table', label: 'テーブル (Table)', width: 1500, height: 800, type: 'table' },
   { id: 'kitchen', label: 'キッチン (Kitchen)', width: 2550, height: 650, type: 'kitchen' },
   { id: 'toilet', label: 'トイレ (Toilet)', width: 400, height: 700, type: 'fixture' },

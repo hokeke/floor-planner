@@ -3,6 +3,7 @@ import { OBJECT_TYPES } from '../constants';
 import { mmToPx } from '../utils/units';
 import Door from './objects/Door';
 import Window from './objects/Window';
+import FixWindow from './objects/FixWindow';
 import Toilet from './objects/Toilet';
 import Bath from './objects/Bath';
 import WashBasin from './objects/WashBasin';
@@ -16,7 +17,7 @@ import Table from './objects/Table';
 import Refrigerator from './objects/Refrigerator';
 
 const ObjectRenderer = ({ obj, isSelected, scale, onHandleMouseDown, onObjectMouseDown }) => {
-  const { x, y, width, height, rotation, type } = obj;
+  const { x, y, width, height, rotation, type, flipX } = obj;
 
   // Convert mm to px
   const xPx = mmToPx(x);
@@ -30,6 +31,8 @@ const ObjectRenderer = ({ obj, isSelected, scale, onHandleMouseDown, onObjectMou
         return <Door width={widthPx} height={heightPx} scale={scale} />;
       case 'window':
         return <Window width={widthPx} height={heightPx} scale={scale} />;
+      case 'fix_window':
+        return <FixWindow width={widthPx} height={heightPx} scale={scale} />;
       case 'toilet':
         return <Toilet width={widthPx} height={heightPx} scale={scale} />;
       case 'bath':
@@ -69,7 +72,7 @@ const ObjectRenderer = ({ obj, isSelected, scale, onHandleMouseDown, onObjectMou
 
   return (
     <g
-      transform={`translate(${xPx}, ${yPx}) rotate(${rotation})`}
+      transform={`translate(${xPx}, ${yPx}) rotate(${rotation}) scale(${flipX ? -1 : 1}, 1)`}
       onMouseDown={(e) => {
         // Stop propagation to prevent canvas from handling the click (which might deselect)
         e.stopPropagation();

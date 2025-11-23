@@ -956,17 +956,6 @@ function App() {
               const isSelected = room.id === selectedRoomId;
               const roomType = ROOM_TYPES.find(t => t.id === room.type) || ROOM_TYPES[1]; // Default to Western
 
-              // Calculate center for text
-              const minX = Math.min(...room.points.map(p => p.x));
-              const maxX = Math.max(...room.points.map(p => p.x));
-              const minY = Math.min(...room.points.map(p => p.y));
-              const maxY = Math.max(...room.points.map(p => p.y));
-              const centerX = (minX + maxX) / 2;
-              const centerY = (minY + maxY) / 2;
-
-              const pointsMm = room.points.map(p => ({ x: pxToMm(p.x), y: pxToMm(p.y) }));
-              const area = calculateArea(pointsMm);
-
               return (
                 <g key={room.id}>
                   <polygon
@@ -984,18 +973,6 @@ function App() {
                       strokeWidth={3 / scale}
                     />
                   )}
-                  <text
-                    x={centerX}
-                    y={centerY}
-                    textAnchor="middle"
-                    dominantBaseline="middle"
-                    fontSize={14 / scale}
-                    pointerEvents="none"
-                    fill="#333"
-                  >
-                    <tspan x={centerX} dy="-0.6em">{roomType.label}</tspan>
-                    <tspan x={centerX} dy="1.2em">{area.tatami.toFixed(1)}畳</tspan>
-                  </text>
                 </g>
               );
             })}
@@ -1046,6 +1023,40 @@ function App() {
                 onObjectMouseDown={handleObjectMouseDown}
               />
             ))}
+
+            {/* Room Labels (Rendered ABOVE everything) */}
+            {rooms.map(room => {
+              if (room.type === 'corridor') return null; // Skip label for corridor
+
+              const roomType = ROOM_TYPES.find(t => t.id === room.type) || ROOM_TYPES[1];
+
+              // Calculate center for text
+              const minX = Math.min(...room.points.map(p => p.x));
+              const maxX = Math.max(...room.points.map(p => p.x));
+              const minY = Math.min(...room.points.map(p => p.y));
+              const maxY = Math.max(...room.points.map(p => p.y));
+              const centerX = (minX + maxX) / 2;
+              const centerY = (minY + maxY) / 2;
+
+              const pointsMm = room.points.map(p => ({ x: pxToMm(p.x), y: pxToMm(p.y) }));
+              const area = calculateArea(pointsMm);
+
+              return (
+                <text
+                  key={`label-${room.id}`}
+                  x={centerX}
+                  y={centerY}
+                  textAnchor="middle"
+                  dominantBaseline="middle"
+                  fontSize={14 / scale}
+                  pointerEvents="none"
+                  fill="#333"
+                >
+                  <tspan x={centerX} dy="-0.6em">{roomType.label}</tspan>
+                  <tspan x={centerX} dy="1.2em">{area.tatami.toFixed(1)}畳</tspan>
+                </text>
+              );
+            })}
 
             {/* Dimension Annotations */}
             <DimensionAnnotations

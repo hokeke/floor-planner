@@ -150,6 +150,17 @@ function PropertiesPanel({
           />
 
           <button
+            onClick={() => {
+              setObjects(objects.map(o =>
+                o.id === selectedObject.id ? { ...o, flipX: !o.flipX } : o
+              ));
+            }}
+            style={{ width: '100%', padding: '5px', marginBottom: '10px', backgroundColor: '#f0f0f0', border: '1px solid #ccc', cursor: 'pointer' }}
+          >
+            左右反転 (Flip Horizontal)
+          </button>
+
+          <button
             className="delete-btn"
             onClick={() => {
               setObjects(objects.filter(o => o.id !== selectedObject.id));
