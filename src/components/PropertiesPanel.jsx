@@ -121,9 +121,17 @@ function PropertiesPanel({
             value={selectedObject.width}
             onChange={(e) => {
               const newWidth = parseInt(e.target.value) || selectedObject.width;
-              setObjects(objects.map(o =>
-                o.id === selectedObject.id ? { ...o, width: newWidth } : o
-              ));
+              setObjects(objects.map(o => {
+                if (o.id === selectedObject.id) {
+                  const updates = { width: newWidth };
+                  if (o.type === 'custom' && o.points) {
+                    const scaleX = newWidth / o.width;
+                    updates.points = o.points.map(p => ({ ...p, x: p.x * scaleX }));
+                  }
+                  return { ...o, ...updates };
+                }
+                return o;
+              }));
             }}
             style={{ width: '100%', padding: '5px', marginBottom: '10px' }}
           />
@@ -139,9 +147,17 @@ function PropertiesPanel({
             value={selectedObject.height}
             onChange={(e) => {
               const newHeight = parseInt(e.target.value) || selectedObject.height;
-              setObjects(objects.map(o =>
-                o.id === selectedObject.id ? { ...o, height: newHeight } : o
-              ));
+              setObjects(objects.map(o => {
+                if (o.id === selectedObject.id) {
+                  const updates = { height: newHeight };
+                  if (o.type === 'custom' && o.points) {
+                    const scaleY = newHeight / o.height;
+                    updates.points = o.points.map(p => ({ ...p, y: p.y * scaleY }));
+                  }
+                  return { ...o, ...updates };
+                }
+                return o;
+              }));
             }}
             style={{ width: '100%', padding: '5px', marginBottom: '10px' }}
           />

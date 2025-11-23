@@ -626,9 +626,23 @@ function App() {
       const newX = fixedX + worldDx / 2;
       const newY = fixedY + worldDy / 2;
 
-      setObjects(objects.map(o =>
-        o.id === selectedObjectId ? { ...o, x: newX, y: newY, width: newWidth, height: newHeight } : o
-      ));
+      setObjects(objects.map(o => {
+        if (o.id === selectedObjectId) {
+          const updates = { x: newX, y: newY, width: newWidth, height: newHeight };
+
+          if (o.type === 'custom' && o.points) {
+            const scaleX = newWidth / obj.width;
+            const scaleY = newHeight / obj.height;
+            updates.points = obj.points.map(p => ({
+              x: p.x * scaleX,
+              y: p.y * scaleY
+            }));
+          }
+
+          return { ...o, ...updates };
+        }
+        return o;
+      }));
     }
 
     if (draggingRoomId && dragStartPos) {
