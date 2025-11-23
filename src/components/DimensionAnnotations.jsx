@@ -126,10 +126,8 @@ const DimensionAnnotations = ({ walls, scale, pan }) => {
     });
   }
 
-  console.log('Total annotations:', annotations.length);
-
   // Add overall building dimensions (outside the segment dimensions)
-  const OVERALL_OFFSET = DIMENSION_OFFSET * 2; // Place overall dimensions further out
+  const OVERALL_OFFSET = DIMENSION_OFFSET * 1.5; // Place overall dimensions 0.5 grid further out
 
   // Overall width at top
   annotations.push({
@@ -174,8 +172,6 @@ const DimensionAnnotations = ({ walls, scale, pan }) => {
     length: maxY - minY,
     isOverall: true
   });
-
-  console.log('Total with overall:', annotations.length);
 
   return (
     <g className="dimension-annotations">
@@ -235,8 +231,8 @@ const DimensionAnnotations = ({ walls, scale, pan }) => {
               {/* Label */}
               <text
                 x={midX}
-                y={ann.y < centerY ? (yPx - 50 / scale) : (yPx + 80 / scale)}
-                fontSize={15 / scale}
+                y={ann.y < centerY ? (yPx - 20 / scale) : (yPx + 30 / scale)}
+                fontSize={10 / scale}
                 fill="#000"
                 textAnchor="middle"
                 style={{ pointerEvents: 'none', userSelect: 'none' }}
@@ -300,12 +296,12 @@ const DimensionAnnotations = ({ walls, scale, pan }) => {
               />
               {/* Label */}
               <text
-                x={ann.x < centerX ? (xPx - 50 / scale) : (xPx + 50 / scale)}
+                x={ann.x < centerX ? (xPx - 20 / scale) : (xPx + 20 / scale)}
                 y={midY}
-                fontSize={15 / scale}
+                fontSize={10 / scale}
                 fill="#000"
                 textAnchor="middle"
-                transform={`rotate(-90, ${ann.x < centerX ? (xPx - 50 / scale) : (xPx + 50 / scale)}, ${midY})`}
+                transform={`rotate(-90, ${ann.x < centerX ? (xPx - 20 / scale) : (xPx + 20 / scale)}, ${midY})`}
                 style={{ pointerEvents: 'none', userSelect: 'none' }}
               >
                 {Math.round(ann.length)}
