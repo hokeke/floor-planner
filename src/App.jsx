@@ -777,6 +777,108 @@ function App() {
 
 
 
+  // Local File Save/Load
+  const fileInputRef = useRef(null);
+
+  const handleSave = async () => {
+    try {
+      const data = {
+        version: 1,
+        timestamp: new Date().toISOString(),
+        data: {
+          rooms,
+          walls,
+          objects
+        }
+      };
+
+      const jsonString = JSON.stringify(data, null, 2);
+      console.log('Saving data size:', jsonString.length);
+
+      // Simple filename without colons
+      const dateStr = new Date().toISOString().split('T')[0];
+      const timeStr = new Date().toTimeString().split(' ')[0].replace(/:/g, '-');
+      const fileName = `floorplan_${dateStr}_${timeStr}.json`;
+
+      console.log('Saving as:', fileName);
+
+      // Try File System Access API first (Modern way)
+      if (window.showSaveFilePicker) {
+        try {
+          const handle = await window.showSaveFilePicker({
+            suggestedName: fileName,
+            types: [{
+              description: 'JSON Files',
+              accept: { 'application/json': ['.json'] },
+            }],
+          });
+          const writable = await handle.createWritable();
+          await writable.write(jsonString);
+          await writable.close();
+          alert('Saved successfully!');
+          return;
+        } catch (err) {
+          if (err.name === 'AbortError') return; // User cancelled
+          console.error('File System Access API failed, falling back:', err);
+          // Fall through to legacy method
+        }
+      }
+
+      // Legacy method (Anchor tag)
+      const blob = new Blob([jsonString], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      link.style.display = 'none';
+      document.body.appendChild(link);
+
+      link.click();
+
+      // Cleanup
+      setTimeout(() => {
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      }, 2000);
+    } catch (err) {
+      console.error('Save failed:', err);
+      alert('Save failed: ' + err.message);
+    }
+  };
+
+  const handleLoad = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const content = JSON.parse(event.target.result);
+        if (content && content.data) {
+          setRooms(content.data.rooms || []);
+          setWalls(content.data.walls || []);
+          setObjects(content.data.objects || []);
+          alert('Loaded successfully!');
+        } else {
+          alert('Invalid file format.');
+        }
+      } catch (err) {
+        console.error('Error parsing file:', err);
+        alert('Failed to load file. Invalid JSON.');
+      }
+      // Reset input so the same file can be selected again
+      e.target.value = '';
+    };
+    reader.readAsText(file);
+  };
+
   return (
     <div className="app-container">
       <Toolbar
@@ -789,6 +891,16 @@ function App() {
         scale={scale}
         setScale={setScale}
         setPan={setPan}
+        onSave={handleSave}
+        onLoad={handleLoad}
+      />
+
+      <input
+        type="file"
+        ref={fileInputRef}
+        style={{ display: 'none' }}
+        accept=".json"
+        onChange={handleFileChange}
       />
 
       <main className="canvas-container">

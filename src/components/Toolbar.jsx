@@ -10,7 +10,9 @@ function Toolbar({
   setActiveObjectType,
   scale,
   setScale,
-  setPan
+  setPan,
+  onSave,
+  onLoad
 }) {
   return (
     <header className="toolbar" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '10px', padding: '10px', borderBottom: '1px solid #ccc' }}>
@@ -74,6 +76,14 @@ function Toolbar({
       <div className="zoom-controls" style={{ marginLeft: 'auto', display: 'flex', gap: '10px', alignItems: 'center' }}>
         <span>Zoom: {Math.round(scale * 100)}%</span>
         <button onClick={() => { setScale(1); setPan({ x: 0, y: 0 }); }} style={{ padding: '5px 10px', cursor: 'pointer' }}>Reset</button>
+      </div>
+      <div className="drive-controls" style={{ marginLeft: '10px', display: 'flex', gap: '10px', alignItems: 'center', borderLeft: '1px solid #ccc', paddingLeft: '10px' }}>
+        <button onClick={onSave} style={{ padding: '5px 10px', cursor: 'pointer', backgroundColor: '#e6f7ff', border: '1px solid #1890ff', borderRadius: '4px', color: '#1890ff' }}>
+          Save
+        </button>
+        <button onClick={onLoad} style={{ padding: '5px 10px', cursor: 'pointer', backgroundColor: '#f6ffed', border: '1px solid #52c41a', borderRadius: '4px', color: '#52c41a' }}>
+          Load
+        </button>
       </div>
     </header>
   );
