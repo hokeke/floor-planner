@@ -15,6 +15,7 @@ import TvStand from './objects/TvStand';
 import Tv from './objects/Tv';
 import Table from './objects/Table';
 import Refrigerator from './objects/Refrigerator';
+import Chair from './objects/Chair';
 
 const ObjectRenderer = ({ obj, isSelected, scale, onHandleMouseDown, onObjectMouseDown }) => {
   const { x, y, width, height, rotation, type, flipX } = obj;
@@ -51,10 +52,12 @@ const ObjectRenderer = ({ obj, isSelected, scale, onHandleMouseDown, onObjectMou
         return <TvStand width={widthPx} height={heightPx} scale={scale} />;
       case 'tv':
         return <Tv width={widthPx} height={heightPx} scale={scale} />;
-      case 'table':
-        return <Table width={widthPx} height={heightPx} scale={scale} />;
       case 'refrigerator':
         return <Refrigerator width={widthPx} height={heightPx} scale={scale} />;
+      case 'chair':
+        return <Chair width={widthPx} height={heightPx} scale={scale} />;
+      case 'table':
+        return <Table width={widthPx} height={heightPx} scale={scale} />;
       case 'custom':
         if (obj.points) {
           const pointsStr = obj.points.map(p => `${mmToPx(p.x)},${mmToPx(p.y)}`).join(' ');

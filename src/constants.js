@@ -25,4 +25,5 @@ export const OBJECT_TYPES = [
   { id: 'tv_stand', label: 'テレビ台 (TV Stand)', width: 1500, height: 450, type: 'tv_stand' },
   { id: 'tv', label: 'テレビ (TV)', width: 1000, height: 150, type: 'tv' },
   { id: 'refrigerator', label: '冷蔵庫 (Refrigerator)', width: 700, height: 700, type: 'refrigerator' },
+  { id: 'chair', label: '椅子 (Chair)', width: 450, height: 500, type: 'chair' },
 ];
