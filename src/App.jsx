@@ -966,6 +966,27 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedObjectId]);
 
+  // Handle Esc key to cancel drawing
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        if (tool === 'room' && currentRoom) {
+          setCurrentRoom(null);
+          setIsDrawing(false);
+        } else if (tool === 'wall' && currentWall) {
+          setCurrentWall(null);
+          setIsDrawing(false);
+        } else if (tool === 'custom_object' && currentCustomObject) {
+          setCurrentCustomObject(null);
+          setIsDrawing(false);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [tool, currentRoom, currentWall, currentCustomObject]);
+
   const selectedRoom = rooms.find(r => r.id === selectedRoomId);
   const selectedWall = walls.find(w => w.id === selectedWallId);
   const selectedObject = objects.find(o => o.id === selectedObjectId);
