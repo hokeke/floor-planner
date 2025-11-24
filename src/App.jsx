@@ -3,6 +3,9 @@ import Grid from './components/Grid';
 import Toolbar from './components/Toolbar';
 import PropertiesPanel from './components/PropertiesPanel';
 import { mmToPx, pxToMm, snapToGrid, calculateArea, GRID_SIZE_MM } from './utils/units';
+import { getDistanceToLineSegment, isPointNearLine, isPointInPolygon, getClosestRoomEdge } from './utils/geometry';
+import { useViewport } from './hooks/useViewport';
+import { useFileHandler } from './hooks/useFileHandler';
 import { ROOM_TYPES, OBJECT_TYPES } from './constants';
 import ObjectRenderer from './components/ObjectRenderer';
 import Snackbar from './components/Snackbar';
@@ -19,10 +22,21 @@ function App() {
   const [currentWall, setCurrentWall] = useState(null); // { start: {x,y}, end: {x,y} }
   const [draggingWallId, setDraggingWallId] = useState(null);
   const [isDrawing, setIsDrawing] = useState(false);
-  const [scale, setScale] = useState(1);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [lastMousePos, setLastMousePos] = useState(null);
+
+  const svgRef = useRef(null);
+
+  // Use custom hooks
+  const {
+    scale,
+    setScale,
+    pan,
+    setPan,
+    screenToWorld,
+    getMousePos: getViewportMousePos,
+    handleWheel: handleViewportWheel
+  } = useViewport();
 
   const showSnackbar = (message, type = 'info') => {
     setSnackbar({ message, type, isOpen: true });
@@ -31,6 +45,21 @@ function App() {
   const closeSnackbar = () => {
     setSnackbar(prev => ({ ...prev, isOpen: false }));
   };
+
+  const {
+    fileInputRef,
+    handleSave,
+    handleLoad,
+    handleFileChange
+  } = useFileHandler({
+    rooms,
+    walls,
+    objects,
+    setRooms,
+    setWalls,
+    setObjects,
+    showSnackbar
+  });
 
   // Coordinate conversion helpers
   const [selectedRoomId, setSelectedRoomId] = useState(null);
@@ -52,90 +81,8 @@ function App() {
   const [hoveredRoomEdge, setHoveredRoomEdge] = useState(null); // { roomId, edgeIndex }
   const [draggingRoomEdge, setDraggingRoomEdge] = useState(null); // { roomId, edgeIndex, startPos: {x,y}, originalPoints: [] }
 
-  const svgRef = useRef(null);
-
-  // Helper to calculate distance from point P to line segment AB
-  const getDistanceToLineSegment = (P, A, B) => {
-    const l2 = (A.x - B.x) ** 2 + (A.y - B.y) ** 2;
-    if (l2 === 0) return Math.sqrt((P.x - A.x) ** 2 + (P.y - A.y) ** 2);
-    let t = ((P.x - A.x) * (B.x - A.x) + (P.y - A.y) * (B.y - A.y)) / l2;
-    t = Math.max(0, Math.min(1, t));
-    const proj = { x: A.x + t * (B.x - A.x), y: A.y + t * (B.y - A.y) };
-    return Math.sqrt((P.x - proj.x) ** 2 + (P.y - proj.y) ** 2);
-  };
-
-  // Helper to find closest room edge
-  // Helper to find closest room edge
-  const getClosestRoomEdge = (point, preferredRoomId = null) => {
-    let closestEdge = null;
-    let minDistance = 10 / scale; // Threshold in pixels (adjusted by scale)
-
-    // Helper to check edges of a specific room
-    const checkRoomEdges = (room) => {
-      let found = null;
-      room.points.forEach((p1, i) => {
-        const p2 = room.points[(i + 1) % room.points.length];
-        const dist = getDistanceToLineSegment(point, p1, p2);
-        if (dist < minDistance) {
-          minDistance = dist;
-          found = { roomId: room.id, edgeIndex: i };
-        }
-      });
-      return found;
-    };
-
-    // Check preferred room first
-    if (preferredRoomId) {
-      const preferredRoom = rooms.find(r => r.id === preferredRoomId);
-      if (preferredRoom) {
-        const found = checkRoomEdges(preferredRoom);
-        if (found) return found;
-      }
-    }
-
-    // Check all rooms
-    rooms.forEach(room => {
-      // Skip preferred room as it was already checked
-      if (room.id === preferredRoomId) return;
-
-      const found = checkRoomEdges(room);
-      if (found) closestEdge = found;
-    });
-
-    return closestEdge;
-  };
-
-  // Coordinate transformation
-  const screenToWorld = (screenX, screenY) => {
-    return {
-      x: (screenX - pan.x) / scale,
-      y: (screenY - pan.y) / scale
-    };
-  };
-
-  const getMousePos = (e) => {
-    const rect = svgRef.current.getBoundingClientRect();
-    return {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top
-    };
-  };
-
-  const handleWheel = (e) => {
-    e.preventDefault();
-    const { x: mouseX, y: mouseY } = getMousePos(e);
-    const zoomSensitivity = 0.001;
-    const delta = -e.deltaY * zoomSensitivity;
-    const newScale = Math.min(Math.max(0.1, scale + delta), 5);
-
-    // Zoom towards mouse pointer
-    const worldPos = screenToWorld(mouseX, mouseY);
-    const newPanX = mouseX - worldPos.x * newScale;
-    const newPanY = mouseY - worldPos.y * newScale;
-
-    setScale(newScale);
-    setPan({ x: newPanX, y: newPanY });
-  };
+  const getMousePos = (e) => getViewportMousePos(e, svgRef);
+  const handleWheel = (e) => handleViewportWheel(e, svgRef);
 
   const handleMouseDown = (e) => {
     // Middle mouse button or Space key (if we added key listener) for panning
@@ -349,38 +296,6 @@ function App() {
         }
 
         // Check for wall click first (priority over rooms)
-        const isPointNearLine = (point, start, end, threshold = 10) => {
-          const A = point.x - start.x;
-          const B = point.y - start.y;
-          const C = end.x - start.x;
-          const D = end.y - start.y;
-
-          const dot = A * C + B * D;
-          const lenSq = C * C + D * D;
-          let param = -1;
-          if (lenSq !== 0) // in case of 0 length line
-            param = dot / lenSq;
-
-          let xx, yy;
-
-          if (param < 0) {
-            xx = start.x;
-            yy = start.y;
-          }
-          else if (param > 1) {
-            xx = end.x;
-            yy = end.y;
-          }
-          else {
-            xx = start.x + param * C;
-            yy = start.y + param * D;
-          }
-
-          const dx = point.x - xx;
-          const dy = point.y - yy;
-          return Math.sqrt(dx * dx + dy * dy) < threshold;
-        };
-
         const clickedWall = walls.find(w => isPointNearLine(worldPos, w.start, w.end, mmToPx(200))); // 200mm threshold
 
         if (clickedWall) {
@@ -393,20 +308,6 @@ function App() {
         }
 
         // Simple hit testing for polygon (point in polygon)
-        const isPointInPolygon = (point, vs) => {
-          let x = point.x, y = point.y;
-          let inside = false;
-          for (let i = 0, j = vs.length - 1; i < vs.length; j = i++) {
-            let xi = vs[i].x, yi = vs[i].y;
-            let xj = vs[j].x, yj = vs[j].y;
-
-            let intersect = ((yi > y) !== (yj > y))
-              && (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
-            if (intersect) inside = !inside;
-          }
-          return inside;
-        };
-
         const clickedRoom = rooms.find(r => isPointInPolygon(worldPos, r.points));
 
         if (clickedRoom) {
@@ -444,7 +345,7 @@ function App() {
     setMousePos(worldPos); // Update for rubber band
 
     if (!draggingRoomEdge && !draggingRoomId && !draggingWallId && !interactionMode && tool === 'select') {
-      const closestEdge = getClosestRoomEdge(worldPos, selectedRoomId);
+      const closestEdge = getClosestRoomEdge(worldPos, rooms, scale, selectedRoomId);
       setHoveredRoomEdge(closestEdge);
     } else {
       setHoveredRoomEdge(null);
@@ -1012,109 +913,6 @@ function App() {
 
 
 
-  // Local File Save/Load
-  const fileInputRef = useRef(null);
-
-  const handleSave = async () => {
-    try {
-      const data = {
-        version: 1,
-        timestamp: new Date().toISOString(),
-        data: {
-          rooms,
-          walls,
-          objects
-        }
-      };
-
-      const jsonString = JSON.stringify(data, null, 2);
-      console.log('Saving data size:', jsonString.length);
-
-      // Simple filename without colons
-      const dateStr = new Date().toISOString().split('T')[0];
-      const timeStr = new Date().toTimeString().split(' ')[0].replace(/:/g, '-');
-      const fileName = `floorplan_${dateStr}_${timeStr}.json`;
-
-      console.log('Saving as:', fileName);
-
-      // Try File System Access API first (Modern way)
-      if (window.showSaveFilePicker) {
-        try {
-          const handle = await window.showSaveFilePicker({
-            suggestedName: fileName,
-            types: [{
-              description: 'JSON Files',
-              accept: { 'application/json': ['.json'] },
-            }],
-          });
-          const writable = await handle.createWritable();
-          await writable.write(jsonString);
-          await writable.close();
-          showSnackbar('Saved successfully!', 'success');
-          return;
-        } catch (err) {
-          if (err.name === 'AbortError') return; // User cancelled
-          console.error('File System Access API failed, falling back:', err);
-          // Fall through to legacy method
-        }
-      }
-
-      // Legacy method (Anchor tag)
-      const blob = new Blob([jsonString], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = fileName;
-      link.style.display = 'none';
-      document.body.appendChild(link);
-
-      link.click();
-
-      // Cleanup
-      setTimeout(() => {
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-      }, 2000);
-
-      showSnackbar('Saved successfully!', 'success');
-    } catch (err) {
-      console.error('Save failed:', err);
-      showSnackbar('Save failed: ' + err.message, 'error');
-    }
-  };
-
-  const handleLoad = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
-    }
-  };
-
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const content = JSON.parse(event.target.result);
-        if (content && content.data) {
-          setRooms(content.data.rooms || []);
-          setWalls(content.data.walls || []);
-          setObjects(content.data.objects || []);
-          showSnackbar('Loaded successfully!', 'success');
-        } else {
-          showSnackbar('Invalid file format.', 'error');
-        }
-      } catch (err) {
-        console.error('Error parsing file:', err);
-        showSnackbar('Failed to load file. Invalid JSON.', 'error');
-      }
-      // Reset input so the same file can be selected again
-      e.target.value = '';
-    };
-    reader.readAsText(file);
-  };
 
   return (
     <div className="app-container">
