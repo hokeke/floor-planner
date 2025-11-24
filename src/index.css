@@ -111,3 +111,54 @@ body {
 .delete-btn:hover {
   background-color: #dc2626;
 }
+
+/* Snackbar */
+.snackbar {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 24px;
+  border-radius: 4px;
+  color: white;
+  font-size: 14px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  z-index: 2000;
+  animation: fadeIn 0.3s, fadeOut 0.3s 2.7s forwards;
+}
+
+.snackbar-success {
+  background-color: #4caf50;
+}
+
+.snackbar-error {
+  background-color: #f44336;
+}
+
+.snackbar-info {
+  background-color: #2196f3;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translate(-50%, 20px);
+  }
+}

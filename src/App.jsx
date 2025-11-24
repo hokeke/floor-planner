@@ -5,6 +5,7 @@ import PropertiesPanel from './components/PropertiesPanel';
 import { mmToPx, pxToMm, snapToGrid, calculateArea, GRID_SIZE_MM } from './utils/units';
 import { ROOM_TYPES, OBJECT_TYPES } from './constants';
 import ObjectRenderer from './components/ObjectRenderer';
+import Snackbar from './components/Snackbar';
 import DimensionAnnotations from './components/DimensionAnnotations';
 import './index.css';
 
@@ -12,6 +13,7 @@ function App() {
   const [rooms, setRooms] = useState([]);
   const [walls, setWalls] = useState([]); // [{ id, start: {x,y}, end: {x,y} }]
   const [objects, setObjects] = useState([]); // { id, type, x, y, width, height, rotation }
+  const [snackbar, setSnackbar] = useState({ message: '', type: 'info', isOpen: false });
   const [currentRoom, setCurrentRoom] = useState(null); // { points: [{x,y}, ...] }
   const [currentCustomObject, setCurrentCustomObject] = useState(null); // { points: [{x,y}, ...] }
   const [currentWall, setCurrentWall] = useState(null); // { start: {x,y}, end: {x,y} }
@@ -21,6 +23,16 @@ function App() {
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [lastMousePos, setLastMousePos] = useState(null);
+
+  const showSnackbar = (message, type = 'info') => {
+    setSnackbar({ message, type, isOpen: true });
+  };
+
+  const closeSnackbar = () => {
+    setSnackbar(prev => ({ ...prev, isOpen: false }));
+  };
+
+  // Coordinate conversion helpers
   const [selectedRoomId, setSelectedRoomId] = useState(null);
   const [selectedWallId, setSelectedWallId] = useState(null); // New state for selected wall
   const [selectedObjectId, setSelectedObjectId] = useState(null);
@@ -1017,7 +1029,7 @@ function App() {
           const writable = await handle.createWritable();
           await writable.write(jsonString);
           await writable.close();
-          alert('Saved successfully!');
+          showSnackbar('Saved successfully!', 'success');
           return;
         } catch (err) {
           if (err.name === 'AbortError') return; // User cancelled
@@ -1043,9 +1055,11 @@ function App() {
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
       }, 2000);
+
+      showSnackbar('Saved successfully!', 'success');
     } catch (err) {
       console.error('Save failed:', err);
-      alert('Save failed: ' + err.message);
+      showSnackbar('Save failed: ' + err.message, 'error');
     }
   };
 
@@ -1067,13 +1081,13 @@ function App() {
           setRooms(content.data.rooms || []);
           setWalls(content.data.walls || []);
           setObjects(content.data.objects || []);
-          alert('Loaded successfully!');
+          showSnackbar('Loaded successfully!', 'success');
         } else {
-          alert('Invalid file format.');
+          showSnackbar('Invalid file format.', 'error');
         }
       } catch (err) {
         console.error('Error parsing file:', err);
-        alert('Failed to load file. Invalid JSON.');
+        showSnackbar('Failed to load file. Invalid JSON.', 'error');
       }
       // Reset input so the same file can be selected again
       e.target.value = '';
@@ -1097,6 +1111,7 @@ function App() {
         onLoad={handleLoad}
       />
 
+      {/* Hidden file input for loading */}
       <input
         type="file"
         ref={fileInputRef}
@@ -1104,6 +1119,14 @@ function App() {
         accept=".json"
         onChange={handleFileChange}
       />
+
+      {snackbar.isOpen && (
+        <Snackbar
+          message={snackbar.message}
+          type={snackbar.type}
+          onClose={closeSnackbar}
+        />
+      )}
 
       <main className="canvas-container">
         <svg
