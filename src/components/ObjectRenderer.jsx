@@ -16,6 +16,7 @@ import Tv from './objects/Tv';
 import Table from './objects/Table';
 import Refrigerator from './objects/Refrigerator';
 import Chair from './objects/Chair';
+import WorkChair from './objects/WorkChair';
 
 const ObjectRenderer = ({ obj, isSelected, scale, onHandleMouseDown, onObjectMouseDown }) => {
   const { x, y, width, height, rotation, type, flipX } = obj;
@@ -56,6 +57,8 @@ const ObjectRenderer = ({ obj, isSelected, scale, onHandleMouseDown, onObjectMou
         return <Refrigerator width={widthPx} height={heightPx} scale={scale} />;
       case 'chair':
         return <Chair width={widthPx} height={heightPx} scale={scale} />;
+      case 'work_chair':
+        return <WorkChair width={widthPx} height={heightPx} scale={scale} />;
       case 'table':
         return <Table width={widthPx} height={heightPx} scale={scale} />;
       case 'custom':
