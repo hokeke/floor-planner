@@ -345,8 +345,18 @@ function App() {
     setMousePos(worldPos); // Update for rubber band
 
     if (!draggingRoomEdge && !draggingRoomId && !draggingWallId && !interactionMode && tool === 'select') {
-      const closestEdge = getClosestRoomEdge(worldPos, rooms, scale, selectedRoomId);
-      setHoveredRoomEdge(closestEdge);
+      if (selectedRoomId) {
+        const selectedRoom = rooms.find(r => r.id === selectedRoomId);
+        if (selectedRoom) {
+          // Only check edges of the selected room
+          const closestEdge = getClosestRoomEdge(worldPos, [selectedRoom], scale);
+          setHoveredRoomEdge(closestEdge);
+        } else {
+          setHoveredRoomEdge(null);
+        }
+      } else {
+        setHoveredRoomEdge(null);
+      }
     } else {
       setHoveredRoomEdge(null);
     }
