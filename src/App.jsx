@@ -81,6 +81,7 @@ function App() {
   const [hoveredRoomEdge, setHoveredRoomEdge] = useState(null); // { roomId, edgeIndex }
   const [draggingRoomEdge, setDraggingRoomEdge] = useState(null); // { roomId, edgeIndex, startPos: {x,y}, originalPoints: [] }
   const [draggingVertex, setDraggingVertex] = useState(null); // { roomId, pointIndex }
+  const [draggingWallHandle, setDraggingWallHandle] = useState(null); // { wallId, handle: 'start' | 'end' }
 
   const getMousePos = (e) => getViewportMousePos(e, svgRef);
   const handleWheel = (e) => handleViewportWheel(e, svgRef);
@@ -357,6 +358,25 @@ function App() {
           return { ...room, points: newPoints };
         }
         return room;
+      }));
+      return;
+    }
+
+    if (draggingWallHandle) {
+      const snappedX = snapToGrid(worldPos.x, GRID_SIZE_MM / 2);
+      const snappedY = snapToGrid(worldPos.y, GRID_SIZE_MM / 2);
+
+      setWalls(walls.map(wall => {
+        if (wall.id === draggingWallHandle.wallId) {
+          const updates = {};
+          if (draggingWallHandle.handle === 'start') {
+            updates.start = { x: snappedX, y: snappedY };
+          } else {
+            updates.end = { x: snappedX, y: snappedY };
+          }
+          return { ...wall, ...updates };
+        }
+        return wall;
       }));
       return;
     }
@@ -780,6 +800,10 @@ function App() {
       setDraggingVertex(null);
     }
 
+    if (draggingWallHandle) {
+      setDraggingWallHandle(null);
+    }
+
     // Reset interaction mode after rotate or resize completes
     if (interactionMode === 'rotate' || interactionMode === 'resize') {
       setInteractionMode(null);
@@ -1133,16 +1157,47 @@ function App() {
             {[...walls].sort((a, b) => (a.id === selectedWallId ? 1 : b.id === selectedWallId ? -1 : 0)).map(wall => {
               const isSelected = wall.id === selectedWallId;
               return (
-                <line
-                  key={wall.id}
-                  x1={wall.start.x}
-                  y1={wall.start.y}
-                  x2={wall.end.x}
-                  y2={wall.end.y}
-                  stroke={isSelected ? "red" : "black"}
-                  strokeWidth={mmToPx(100)} // 100mm wall thickness
-                  strokeLinecap="square"
-                />
+                <g key={wall.id}>
+                  <line
+                    x1={wall.start.x}
+                    y1={wall.start.y}
+                    x2={wall.end.x}
+                    y2={wall.end.y}
+                    stroke={isSelected ? "red" : "black"}
+                    strokeWidth={mmToPx(100)} // 100mm wall thickness
+                    strokeLinecap="square"
+                  />
+                  {isSelected && (
+                    <>
+                      <circle
+                        cx={wall.start.x}
+                        cy={wall.start.y}
+                        r={5 / scale}
+                        fill="white"
+                        stroke="red"
+                        strokeWidth={2 / scale}
+                        style={{ cursor: 'pointer' }}
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          setDraggingWallHandle({ wallId: wall.id, handle: 'start' });
+                        }}
+                      />
+                      <circle
+                        cx={wall.end.x}
+                        cy={wall.end.y}
+                        r={5 / scale}
+                        fill="white"
+                        stroke="red"
+                        strokeWidth={2 / scale}
+                        style={{ cursor: 'pointer' }}
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          setDraggingWallHandle({ wallId: wall.id, handle: 'end' });
+                        }}
+                      />
+                    </>
+                  )}
+                </g>
               );
             })}
 
