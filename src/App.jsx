@@ -246,6 +246,28 @@ function App() {
           }
         }
 
+        // Check for room edge dragging first (priority over objects, walls and rooms)
+        if (hoveredRoomEdge) {
+          const room = rooms.find(r => r.id === hoveredRoomEdge.roomId);
+          if (room) {
+            // Use finer grid for edge dragging start position to match movement
+            const edgeStartX = snapToGrid(worldPos.x, GRID_SIZE_MM / 8);
+            const edgeStartY = snapToGrid(worldPos.y, GRID_SIZE_MM / 8);
+
+            setDraggingRoomEdge({
+              roomId: hoveredRoomEdge.roomId,
+              edgeIndex: hoveredRoomEdge.edgeIndex,
+              startPos: { x: edgeStartX, y: edgeStartY },
+              originalPoints: [...room.points]
+            });
+            // Do NOT deselect the room, as we are modifying it
+            // setSelectedRoomId(null); 
+            setSelectedWallId(null);
+            setSelectedObjectId(null);
+            return; // Prevent further click handling if an edge is being dragged
+          }
+        }
+
         // Check for object click
         // Simple bounding box hit test (taking rotation into account is complex, simplifying for now)
         const clickedObject = objects.slice().reverse().find(obj => {
@@ -272,27 +294,6 @@ function App() {
             initialObjectState: { ...clickedObject }
           });
           return;
-        }
-
-        // Check for room edge dragging first (priority over walls and rooms)
-        if (hoveredRoomEdge) {
-          const room = rooms.find(r => r.id === hoveredRoomEdge.roomId);
-          if (room) {
-            // Use finer grid for edge dragging start position to match movement
-            const edgeStartX = snapToGrid(worldPos.x, GRID_SIZE_MM / 8);
-            const edgeStartY = snapToGrid(worldPos.y, GRID_SIZE_MM / 8);
-
-            setDraggingRoomEdge({
-              roomId: hoveredRoomEdge.roomId,
-              edgeIndex: hoveredRoomEdge.edgeIndex,
-              startPos: { x: edgeStartX, y: edgeStartY },
-              originalPoints: [...room.points]
-            });
-            setSelectedRoomId(null);
-            setSelectedWallId(null);
-            setSelectedObjectId(null);
-            return; // Prevent further click handling if an edge is being dragged
-          }
         }
 
         // Check for wall click first (priority over rooms)
@@ -357,10 +358,8 @@ function App() {
       } else {
         setHoveredRoomEdge(null);
       }
-    } else {
-      setHoveredRoomEdge(null);
     }
-
+    // Do not clear hoveredRoomEdge if dragging, so it persists for double-click
     if (isDrawing && tool === 'wall' && currentWall) {
       const snappedX = snapToGrid(worldPos.x, GRID_SIZE_MM / 2);
       const snappedY = snapToGrid(worldPos.y, GRID_SIZE_MM / 2);
@@ -821,6 +820,64 @@ function App() {
     });
   };
 
+  const handleDoubleClick = (e) => {
+    let targetEdge = hoveredRoomEdge;
+
+    // Robustness: If hoveredRoomEdge is lost (e.g. due to drag), try to find it again
+    if (!targetEdge && selectedRoomId) {
+      const { x, y } = getMousePos(e);
+      const worldPos = screenToWorld(x, y);
+      const selectedRoom = rooms.find(r => r.id === selectedRoomId);
+      if (selectedRoom) {
+        targetEdge = getClosestRoomEdge(worldPos, [selectedRoom], scale);
+      }
+    }
+
+    if (targetEdge) {
+      const room = rooms.find(r => r.id === targetEdge.roomId);
+      if (room) {
+        const { x, y } = getMousePos(e);
+        const worldPos = screenToWorld(x, y);
+
+        // Calculate projection point on the edge for precision
+        const p1 = room.points[targetEdge.edgeIndex];
+        const p2 = room.points[(targetEdge.edgeIndex + 1) % room.points.length];
+
+        // Vector P1->P2
+        const dx = p2.x - p1.x;
+        const dy = p2.y - p1.y;
+        const l2 = dx * dx + dy * dy;
+
+        let newPoint = worldPos;
+
+        if (l2 > 0) {
+          // Projection of Mouse->P1 onto P1->P2
+          const t = ((worldPos.x - p1.x) * dx + (worldPos.y - p1.y) * dy) / l2;
+          const clampedT = Math.max(0, Math.min(1, t));
+
+          // Calculate projected point
+          let px = p1.x + clampedT * dx;
+          let py = p1.y + clampedT * dy;
+
+          // Snap to 0.5 grid (GRID_SIZE_MM / 2)
+          // Note: We snap the projected point to the grid. 
+          // If the wall is not on the grid, this might move the point slightly off the line.
+          // However, for standard usage where walls are grid-aligned, this ensures vertices are on grid.
+          px = snapToGrid(px, GRID_SIZE_MM / 2);
+          py = snapToGrid(py, GRID_SIZE_MM / 2);
+
+          newPoint = { x: px, y: py };
+        }
+
+        // Insert new point after the start point of the edge
+        const newPoints = [...room.points];
+        newPoints.splice(targetEdge.edgeIndex + 1, 0, newPoint);
+
+        setRooms(rooms.map(r => r.id === room.id ? { ...r, points: newPoints } : r));
+      }
+    }
+  };
+
   // Prevent default browser zoom
   useEffect(() => {
     const svg = svgRef.current;
@@ -966,6 +1023,7 @@ function App() {
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
+          onDoubleClick={handleDoubleClick}
           className="drawing-canvas"
           style={{ cursor: isPanning ? 'grabbing' : (tool === 'room' || tool === 'wall' ? 'crosshair' : 'default') }}
         >
@@ -1113,9 +1171,32 @@ function App() {
                       stroke="blue"
                       strokeWidth={4 / scale}
                       strokeLinecap="round"
-                      pointerEvents="none"
+                      pointerEvents="stroke"
                     />
                   )}
+                  {/* Vertices */}
+                  {room.points.map((p, i) => (
+                    <circle
+                      key={i}
+                      cx={p.x}
+                      cy={p.y}
+                      r={5 / scale}
+                      fill="white"
+                      stroke="blue"
+                      strokeWidth={2 / scale}
+                      style={{ cursor: 'pointer' }}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onDoubleClick={(e) => {
+                        e.stopPropagation(); // Prevent adding a vertex when removing one
+                        if (room.points.length > 3) {
+                          const newPoints = room.points.filter((_, index) => index !== i);
+                          setRooms(rooms.map(r => r.id === room.id ? { ...r, points: newPoints } : r));
+                        } else {
+                          showSnackbar('Cannot remove vertex: Room must have at least 3 points', 'error');
+                        }
+                      }}
+                    />
+                  ))}
                 </g>
               );
             })}
