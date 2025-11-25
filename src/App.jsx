@@ -80,6 +80,7 @@ function App() {
   // Room edge resizing state
   const [hoveredRoomEdge, setHoveredRoomEdge] = useState(null); // { roomId, edgeIndex }
   const [draggingRoomEdge, setDraggingRoomEdge] = useState(null); // { roomId, edgeIndex, startPos: {x,y}, originalPoints: [] }
+  const [draggingVertex, setDraggingVertex] = useState(null); // { roomId, pointIndex }
 
   const getMousePos = (e) => getViewportMousePos(e, svgRef);
   const handleWheel = (e) => handleViewportWheel(e, svgRef);
@@ -344,6 +345,21 @@ function App() {
 
     const worldPos = screenToWorld(x, y);
     setMousePos(worldPos); // Update for rubber band
+
+    if (draggingVertex) {
+      const snappedX = snapToGrid(worldPos.x, GRID_SIZE_MM / 2);
+      const snappedY = snapToGrid(worldPos.y, GRID_SIZE_MM / 2);
+
+      setRooms(rooms.map(room => {
+        if (room.id === draggingVertex.roomId) {
+          const newPoints = [...room.points];
+          newPoints[draggingVertex.pointIndex] = { x: snappedX, y: snappedY };
+          return { ...room, points: newPoints };
+        }
+        return room;
+      }));
+      return;
+    }
 
     if (!draggingRoomEdge && !draggingRoomId && !draggingWallId && !interactionMode && tool === 'select') {
       if (selectedRoomId) {
@@ -758,6 +774,10 @@ function App() {
 
     if (draggingRoomEdge) {
       setDraggingRoomEdge(null);
+    }
+
+    if (draggingVertex) {
+      setDraggingVertex(null);
     }
 
     // Reset interaction mode after rotate or resize completes
@@ -1185,7 +1205,10 @@ function App() {
                       stroke="blue"
                       strokeWidth={2 / scale}
                       style={{ cursor: 'pointer' }}
-                      onMouseDown={(e) => e.stopPropagation()}
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        setDraggingVertex({ roomId: room.id, pointIndex: i });
+                      }}
                       onDoubleClick={(e) => {
                         e.stopPropagation(); // Prevent adding a vertex when removing one
                         if (room.points.length > 3) {
