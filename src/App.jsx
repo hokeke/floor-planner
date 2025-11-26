@@ -3,7 +3,7 @@ import Grid from './components/Grid';
 import Toolbar from './components/Toolbar';
 import PropertiesPanel from './components/PropertiesPanel';
 import { mmToPx, pxToMm, snapToGrid, calculateArea, GRID_SIZE_MM } from './utils/units';
-import { getDistanceToLineSegment, isPointNearLine, isPointInPolygon, getClosestRoomEdge } from './utils/geometry';
+import { getDistanceToLineSegment, isPointNearLine, isPointInPolygon, getClosestRoomEdge, getPolygonCentroid } from './utils/geometry';
 import { useViewport } from './hooks/useViewport';
 import { useFileHandler } from './hooks/useFileHandler';
 import { ROOM_TYPES, OBJECT_TYPES } from './constants';
@@ -1041,8 +1041,9 @@ function App() {
     };
   }, { tatami: 0, tsubo: 0, sqm: 0 });
 
-
-
+  const updateRoomLabel = (id, label) => {
+    setRooms(rooms.map(r => r.id === id ? { ...r, customLabel: label } : r));
+  };
 
   return (
     <div className="app-container">
@@ -1154,6 +1155,13 @@ function App() {
                       pointerEvents="none"
                     />
                   )}
+                  {/* Vertices (Only show if not selected - maybe simpler to not show vertices for unselected rooms?) */}
+                  {/* For now, keep vertices hidden for unselected rooms to reduce clutter, or show them if needed. 
+                      Original code didn't show vertices for unselected rooms in the same way. 
+                      Let's just add the label. */}
+
+                  {/* Room Label */}
+
                 </g>
               );
             })}
@@ -1296,6 +1304,8 @@ function App() {
                       }}
                     />
                   ))}
+                  {/* Room Label */}
+
                 </g>
               );
             })}
@@ -1306,30 +1316,27 @@ function App() {
 
               const roomType = ROOM_TYPES.find(t => t.id === room.type) || ROOM_TYPES[1];
 
-              // Calculate center for text
-              const minX = Math.min(...room.points.map(p => p.x));
-              const maxX = Math.max(...room.points.map(p => p.x));
-              const minY = Math.min(...room.points.map(p => p.y));
-              const maxY = Math.max(...room.points.map(p => p.y));
-              const centerX = (minX + maxX) / 2;
-              const centerY = (minY + maxY) / 2;
-
+              // Calculate center for text using centroid
+              const centroid = getPolygonCentroid(room.points);
               const pointsMm = room.points.map(p => ({ x: pxToMm(p.x), y: pxToMm(p.y) }));
               const area = calculateArea(pointsMm);
+
+              const labelText = room.type === 'free' ? (room.customLabel || '') : roomType.label;
 
               return (
                 <text
                   key={`label-${room.id}`}
-                  x={centerX}
-                  y={centerY}
+                  x={centroid.x}
+                  y={centroid.y}
                   textAnchor="middle"
                   dominantBaseline="middle"
                   fontSize={14 / scale}
                   pointerEvents="none"
                   fill="#333"
+                  style={{ userSelect: 'none' }}
                 >
-                  <tspan x={centerX} dy="-0.6em">{roomType.label}</tspan>
-                  <tspan x={centerX} dy="1.2em">{area.tatami.toFixed(1)}畳</tspan>
+                  <tspan x={centroid.x} dy="-0.6em">{labelText}</tspan>
+                  <tspan x={centroid.x} dy="1.2em">{area.tatami.toFixed(1)}畳</tspan>
                 </text>
               );
             })}

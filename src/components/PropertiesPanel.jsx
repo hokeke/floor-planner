@@ -62,6 +62,22 @@ function PropertiesPanel({
             <li>{selectedRoomArea.tsubo.toFixed(2)} 坪 (Tsubo)</li>
             <li>{selectedRoomArea.sqm.toFixed(2)} m²</li>
           </ul>
+
+          {selectedRoom.type === 'free' && (
+            <div style={{ marginTop: '10px' }}>
+              <label style={{ display: 'block', marginBottom: '5px' }}>ラベル (Label):</label>
+              <input
+                type="text"
+                value={selectedRoom.customLabel || ''}
+                placeholder="部屋名 (Room Name)"
+                onChange={(e) => {
+                  setRooms(rooms.map(r => r.id === selectedRoom.id ? { ...r, customLabel: e.target.value } : r));
+                }}
+                style={{ width: '100%', padding: '5px', marginBottom: '10px' }}
+              />
+            </div>
+          )}
+
           <button
             className="delete-btn"
             onClick={() => {

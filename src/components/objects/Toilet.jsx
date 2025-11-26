@@ -1,6 +1,6 @@
 import React from 'react';
 
-const Toilet = ({ width, height, strokeWidth }) => {
+const Toilet = ({ width, height, strokeWidth = 1 }) => {
   // Custom Toilet Path
   // Native size approx 21.6 x 44
   const scaleX = width / 21.6;

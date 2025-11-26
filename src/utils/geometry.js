@@ -95,3 +95,11 @@ export const getClosestRoomEdge = (point, rooms, scale, preferredRoomId = null) 
 
   return closestEdge;
 };
+
+// Helper to calculate polygon centroid (arithmetic mean of vertices)
+export const getPolygonCentroid = (points) => {
+  if (!points || points.length === 0) return { x: 0, y: 0 };
+  const x = points.reduce((acc, p) => acc + p.x, 0) / points.length;
+  const y = points.reduce((acc, p) => acc + p.y, 0) / points.length;
+  return { x, y };
+};

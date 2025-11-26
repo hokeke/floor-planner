@@ -8,6 +8,7 @@ export const ROOM_TYPES = [
   { id: 'bath', label: '浴室', color: '#E0FFFF' }, // Light Cyan
   { id: 'wash', label: '洗面所', color: '#E0FFFF' }, // Light Cyan
   { id: 'corridor', label: '廊下', color: '#E8E8E8' }, // Light Gray
+  { id: 'free', label: 'フリー', color: '#FFFFFF' }, // White
 ];
 
 export const OBJECT_TYPES = [
