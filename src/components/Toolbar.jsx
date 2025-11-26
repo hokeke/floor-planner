@@ -8,6 +8,8 @@ function Toolbar({
   setActiveRoomType,
   activeObjectType,
   setActiveObjectType,
+  activeWallMode,
+  setActiveWallMode,
   scale,
   setScale,
   setPan,
@@ -45,13 +47,25 @@ function Toolbar({
             </select>
           )}
         </div>
-        <button
-          className={tool === 'wall' ? 'active' : ''}
-          onClick={() => setTool('wall')}
-          style={{ padding: '8px 12px', cursor: 'pointer', backgroundColor: tool === 'wall' ? '#ddd' : '#f0f0f0', border: '1px solid #ccc', borderRadius: '4px' }}
-        >
-          壁作成 (Wall)
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+          <button
+            className={tool === 'wall' ? 'active' : ''}
+            onClick={() => setTool('wall')}
+            style={{ padding: '8px 12px', cursor: 'pointer', backgroundColor: tool === 'wall' ? '#ddd' : '#f0f0f0', border: '1px solid #ccc', borderRadius: '4px' }}
+          >
+            壁作成 (Wall)
+          </button>
+          {tool === 'wall' && (
+            <select
+              value={activeWallMode}
+              onChange={(e) => setActiveWallMode(e.target.value)}
+              style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
+            >
+              <option value="wall">壁 (Wall)</option>
+              <option value="column">柱 (Column)</option>
+            </select>
+          )}
+        </div>
         <button
           className={tool === 'custom_object' ? 'active' : ''}
           onClick={() => setTool('custom_object')}

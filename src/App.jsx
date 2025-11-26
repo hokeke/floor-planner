@@ -72,6 +72,7 @@ function App() {
 
   const [activeRoomType, setActiveRoomType] = useState('western'); // Default type for new rooms
   const [activeObjectType, setActiveObjectType] = useState('door');
+  const [activeWallMode, setActiveWallMode] = useState('wall'); // 'wall' or 'column'
 
   // Interaction state for objects
   const [interactionMode, setInteractionMode] = useState(null); // 'move', 'resize', 'rotate'
@@ -139,24 +140,42 @@ function App() {
           }
         }
       } else if (tool === 'wall') {
-        const newPoint = { x: snappedX, y: snappedY };
-        if (!isDrawing) {
-          setIsDrawing(true);
-          setCurrentWall({ start: newPoint, end: newPoint });
+        if (activeWallMode === 'column') {
+          // Place Column
+          const newObject = {
+            id: Date.now(),
+            type: 'column',
+            x: pxToMm(snappedX),
+            y: pxToMm(snappedY),
+            width: 100,
+            height: 100,
+            rotation: 0
+          };
+          setObjects([...objects, newObject]);
+          setSelectedObjectId(newObject.id);
           setSelectedRoomId(null);
           setSelectedWallId(null);
-          setSelectedObjectId(null);
         } else {
-          // Finish wall
-          const newWall = {
-            id: Date.now(),
-            start: currentWall.start,
-            end: newPoint
-          };
-          setWalls([...walls, newWall]);
-          setCurrentWall(null);
-          setIsDrawing(false);
-          // Stay in wall tool
+          // Create Wall
+          const newPoint = { x: snappedX, y: snappedY };
+          if (!isDrawing) {
+            setIsDrawing(true);
+            setCurrentWall({ start: newPoint, end: newPoint });
+            setSelectedRoomId(null);
+            setSelectedWallId(null);
+            setSelectedObjectId(null);
+          } else {
+            // Finish wall
+            const newWall = {
+              id: Date.now(),
+              start: currentWall.start,
+              end: newPoint
+            };
+            setWalls([...walls, newWall]);
+            setCurrentWall(null);
+            setIsDrawing(false);
+            // Stay in wall tool
+          }
         }
       } else if (tool === 'custom_object') {
         const newPoint = { x: snappedX, y: snappedY };
@@ -1034,6 +1053,8 @@ function App() {
         setActiveRoomType={setActiveRoomType}
         activeObjectType={activeObjectType}
         setActiveObjectType={setActiveObjectType}
+        activeWallMode={activeWallMode}
+        setActiveWallMode={setActiveWallMode}
         scale={scale}
         setScale={setScale}
         setPan={setPan}
