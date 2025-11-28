@@ -17,7 +17,7 @@ function Toolbar({
   onLoad
 }) {
   return (
-    <header className="toolbar" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '10px', padding: '10px', borderBottom: '1px solid #ccc' }}>
+    <header className="toolbar text-sm" style={{ display: 'flex', flexWrap: 'nowrap', alignItems: 'center', gap: '10px', padding: '10px', borderBottom: '1px solid #ccc', overflowX: 'auto' }}>
       <h1 style={{ margin: 0, marginRight: '20px', fontSize: '1.2rem' }}>間取り作成 (Floor Plan)</h1>
       <div className="tools" style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center' }}>
         <button
