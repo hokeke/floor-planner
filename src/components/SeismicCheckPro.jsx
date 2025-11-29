@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { Upload, Activity, Shield, AlertTriangle, CheckCircle, Info, Move, MousePointer2, Trash2, RotateCcw, X, Home, ArrowUpCircle, Sparkles, Loader2, FileJson, Key } from 'lucide-react';
+import { Upload, Activity, Shield, AlertTriangle, CheckCircle, Info, Move, MousePointer2, Trash2, RotateCcw, X, Home, ArrowUpCircle, Sparkles, Loader2, FileJson, Key, Settings, Send, Wand2 } from 'lucide-react';
 
 const SeismicCheckPro = ({ initialData }) => {
   // State
@@ -18,11 +18,18 @@ const SeismicCheckPro = ({ initialData }) => {
   // Default is arbitrary, will be set by JSON data
   const [viewBox, setViewBox] = useState("0 0 100 100");
 
-  // Gemini API State for Advice
+  // Gemini API State
   const [apiKey, setApiKey] = useState(""); // User input API Key
-  const [aiAdvice, setAiAdvice] = useState(null);
+  const [showApiKeyInput, setShowApiKeyInput] = useState(false); // Toggle for API Key input
+
+  // Chat State
+  const [chatMessages, setChatMessages] = useState([]);
+  const [inputMessage, setInputMessage] = useState("");
   const [isLoadingAI, setIsLoadingAI] = useState(false);
+  const [isOptimizing, setIsOptimizing] = useState(false); // Optimization state
   const [aiError, setAiError] = useState(null);
+
+  const messagesEndRef = useRef(null);
 
   // Refs
   const containerRef = useRef(null);
@@ -41,40 +48,19 @@ const SeismicCheckPro = ({ initialData }) => {
     return `id-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   };
 
-  // Process JSON Data: Keep original coordinates (mm), adjust ViewBox
-  const processJsonData = (data) => {
+  // Scroll to bottom of chat
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chatMessages, isLoadingAI]);
+
+  // --- Logic Extraction: Get Valid Wall Segments from JSON ---
+  const getValidWallSegments = (data) => {
+    if (!data || !data.walls) return [];
+
     const COORD_SCALE = 5;
     const scalePt = (val) => val * COORD_SCALE;
 
-    // 1. Calculate Bounding Box
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-
-    const checkPoint = (x, y) => {
-      if (x < minX) minX = x;
-      if (x > maxX) maxX = x;
-      if (y < minY) minY = y;
-      if (y > maxY) maxY = y;
-    };
-
-    data.rooms?.forEach(room => room.points.forEach(p => checkPoint(scalePt(p.x), scalePt(p.y))));
-    data.walls?.forEach(wall => {
-      checkPoint(scalePt(wall.start.x), scalePt(wall.start.y));
-      checkPoint(scalePt(wall.end.x), scalePt(wall.end.y));
-    });
-    data.objects?.forEach(obj => checkPoint(obj.x, obj.y));
-
-    if (minX === Infinity) { minX = 0; maxX = 10000; minY = 0; maxY = 10000; }
-
-    const padding = 1000;
-    const vbMinX = minX - padding;
-    const vbMinY = minY - padding;
-    const vbWidth = (maxX - minX) + padding * 2;
-    const vbHeight = (maxY - minY) + padding * 2;
-    setViewBox(`${vbMinX} ${vbMinY} ${vbWidth} ${vbHeight}`);
-
-    // --- Wall Splitting Logic ---
-
-    // 2-a. Extract Openings (Windows/Doors) from objects
+    // Extract Openings
     const openings = [];
     data.objects?.forEach(obj => {
       if (
@@ -83,11 +69,9 @@ const SeismicCheckPro = ({ initialData }) => {
         obj.type === 'entrance' ||
         obj.type === 'opening'
       ) {
-        // Determine orientation based on rotation
         const rotation = (obj.rotation || 0) % 360;
         const isVertical = (Math.abs(rotation - 90) < 1 || Math.abs(rotation - 270) < 1);
-
-        const openingSize = obj.width;
+        const openingSize = obj.width; // Usually width in JSON is the length along the wall
         const thickness = obj.height > 100 ? obj.height : 300;
 
         openings.push({
@@ -100,115 +84,136 @@ const SeismicCheckPro = ({ initialData }) => {
       }
     });
 
-    const newElements = [];
+    const validSegments = [];
 
-    // 2-b. Process Walls: Subtract Openings
-    if (data.walls) {
-      data.walls.forEach(w => {
-        const x1 = scalePt(w.start.x);
-        const y1 = scalePt(w.start.y);
-        const x2 = scalePt(w.end.x);
-        const y2 = scalePt(w.end.y);
+    data.walls.forEach(w => {
+      const x1 = scalePt(w.start.x);
+      const y1 = scalePt(w.start.y);
+      const x2 = scalePt(w.end.x);
+      const y2 = scalePt(w.end.y);
 
-        const isWallVertical = Math.abs(x1 - x2) < 10;
-        const isWallHorizontal = Math.abs(y1 - y2) < 10;
+      const isWallVertical = Math.abs(x1 - x2) < 10;
+      const isWallHorizontal = Math.abs(y1 - y2) < 10;
 
-        let intervals = [];
-        let wallPos = 0;
+      let intervals = [];
+      let wallPos = 0;
 
+      if (isWallHorizontal) {
+        intervals = [{ start: Math.min(x1, x2), end: Math.max(x1, x2) }];
+        wallPos = y1;
+      } else if (isWallVertical) {
+        intervals = [{ start: Math.min(y1, y2), end: Math.max(y1, y2) }];
+        wallPos = x1;
+      } else {
+        // Diagonal walls - simplified (no subtraction)
+        const length = Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+        if (length > 100) {
+          validSegments.push({ x1, y1, x2, y2, length });
+        }
+        return;
+      }
+
+      // Find intersecting openings
+      const overlappingOpenings = openings.filter(op => {
         if (isWallHorizontal) {
-          intervals = [{ start: Math.min(x1, x2), end: Math.max(x1, x2) }];
-          wallPos = y1;
-        } else if (isWallVertical) {
-          intervals = [{ start: Math.min(y1, y2), end: Math.max(y1, y2) }];
-          wallPos = x1;
+          const opYMin = op.isVertical ? op.y - op.size / 2 : op.y - op.thickness / 2;
+          const opYMax = op.isVertical ? op.y + op.size / 2 : op.y + op.thickness / 2;
+          return (wallPos >= opYMin - 50 && wallPos <= opYMax + 50);
         } else {
-          // Diagonal walls
-          const length = Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
-          if (length > 100) {
-            newElements.push({
-              id: generateId(),
-              type: 'wall',
-              x1, y1, x2, y2, length, strength: length * WALL_MULTIPLIER
-            });
-          }
-          return;
+          const opXMin = op.isVertical ? op.x - op.thickness / 2 : op.x - op.size / 2;
+          const opXMax = op.isVertical ? op.x + op.thickness / 2 : op.x + op.size / 2;
+          return (wallPos >= opXMin - 50 && wallPos <= opXMax + 50);
         }
-
-        // Find intersecting openings
-        const overlappingOpenings = openings.filter(op => {
-          if (isWallHorizontal) {
-            const opYMin = op.isVertical ? op.y - op.size / 2 : op.y - op.thickness / 2;
-            const opYMax = op.isVertical ? op.y + op.size / 2 : op.y + op.thickness / 2;
-            return (wallPos >= opYMin - 50 && wallPos <= opYMax + 50);
-          } else {
-            const opXMin = op.isVertical ? op.x - op.thickness / 2 : op.x - op.size / 2;
-            const opXMax = op.isVertical ? op.x + op.thickness / 2 : op.x + op.size / 2;
-            return (wallPos >= opXMin - 50 && wallPos <= opXMax + 50);
-          }
-        }).map(op => {
-          if (isWallHorizontal) {
-            const halfSize = (op.isVertical ? op.thickness : op.size) / 2;
-            return { start: op.x - halfSize, end: op.x + halfSize };
-          } else {
-            const halfSize = (op.isVertical ? op.size : op.thickness) / 2;
-            return { start: op.y - halfSize, end: op.y + halfSize };
-          }
-        });
-
-        // Subtract intervals
-        if (overlappingOpenings.length > 0) {
-          overlappingOpenings.sort((a, b) => a.start - b.start);
-          let currentIntervals = [...intervals];
-
-          overlappingOpenings.forEach(op => {
-            const nextIntervals = [];
-            currentIntervals.forEach(iv => {
-              const intersectStart = Math.max(iv.start, op.start);
-              const intersectEnd = Math.min(iv.end, op.end);
-
-              if (intersectStart < intersectEnd) {
-                if (iv.start < intersectStart) {
-                  nextIntervals.push({ start: iv.start, end: intersectStart });
-                }
-                if (intersectEnd < iv.end) {
-                  nextIntervals.push({ start: intersectEnd, end: iv.end });
-                }
-              } else {
-                nextIntervals.push(iv);
-              }
-            });
-            currentIntervals = nextIntervals;
-          });
-          intervals = currentIntervals;
+      }).map(op => {
+        if (isWallHorizontal) {
+          const halfSize = (op.isVertical ? op.thickness : op.size) / 2;
+          return { start: op.x - halfSize, end: op.x + halfSize };
+        } else {
+          const halfSize = (op.isVertical ? op.size : op.thickness) / 2;
+          return { start: op.y - halfSize, end: op.y + halfSize };
         }
-
-        // Create wall elements
-        intervals.forEach(iv => {
-          const len = iv.end - iv.start;
-          if (len > 100) {
-            if (isWallHorizontal) {
-              newElements.push({
-                id: generateId(),
-                type: 'wall',
-                x1: iv.start, y1: wallPos,
-                x2: iv.end, y2: wallPos,
-                length: len, strength: len * WALL_MULTIPLIER
-              });
-            } else {
-              newElements.push({
-                id: generateId(),
-                type: 'wall',
-                x1: wallPos, y1: iv.start,
-                x2: wallPos, y2: iv.end,
-                length: len, strength: len * WALL_MULTIPLIER
-              });
-            }
-          }
-        });
-
       });
-    }
+
+      // Subtract intervals
+      if (overlappingOpenings.length > 0) {
+        overlappingOpenings.sort((a, b) => a.start - b.start);
+        let currentIntervals = [...intervals];
+
+        overlappingOpenings.forEach(op => {
+          const nextIntervals = [];
+          currentIntervals.forEach(iv => {
+            const intersectStart = Math.max(iv.start, op.start);
+            const intersectEnd = Math.min(iv.end, op.end);
+
+            if (intersectStart < intersectEnd) {
+              if (iv.start < intersectStart) {
+                nextIntervals.push({ start: iv.start, end: intersectStart });
+              }
+              if (intersectEnd < iv.end) {
+                nextIntervals.push({ start: intersectEnd, end: iv.end });
+              }
+            } else {
+              nextIntervals.push(iv);
+            }
+          });
+          currentIntervals = nextIntervals;
+        });
+        intervals = currentIntervals;
+      }
+
+      // Create wall segments
+      intervals.forEach(iv => {
+        const len = iv.end - iv.start;
+        if (len > 100) {
+          if (isWallHorizontal) {
+            validSegments.push({ x1: iv.start, y1: wallPos, x2: iv.end, y2: wallPos, length: len });
+          } else {
+            validSegments.push({ x1: wallPos, y1: iv.start, x2: wallPos, y2: iv.end, length: len });
+          }
+        }
+      });
+    });
+
+    return validSegments;
+  };
+
+  // Process JSON Data
+  const processJsonData = (data) => {
+    const COORD_SCALE = 5;
+    const scalePt = (val) => val * COORD_SCALE;
+
+    // 1. Calculate Bounding Box
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    const checkPoint = (x, y) => {
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    };
+    data.rooms?.forEach(room => room.points.forEach(p => checkPoint(scalePt(p.x), scalePt(p.y))));
+    data.walls?.forEach(wall => {
+      checkPoint(scalePt(wall.start.x), scalePt(wall.start.y));
+      checkPoint(scalePt(wall.end.x), scalePt(wall.end.y));
+    });
+    data.objects?.forEach(obj => checkPoint(obj.x, obj.y));
+    if (minX === Infinity) { minX = 0; maxX = 10000; minY = 0; maxY = 10000; }
+
+    const padding = 1000;
+    const vbMinX = minX - padding;
+    const vbMinY = minY - padding;
+    const vbWidth = (maxX - minX) + padding * 2;
+    const vbHeight = (maxY - minY) + padding * 2;
+    setViewBox(`${vbMinX} ${vbMinY} ${vbWidth} ${vbHeight}`);
+
+    // 2. Generate Initial Walls (Using shared logic)
+    const validSegments = getValidWallSegments(data);
+    const newElements = validSegments.map(s => ({
+      id: generateId(),
+      type: 'wall',
+      x1: s.x1, y1: s.y1, x2: s.x2, y2: s.y2,
+      length: s.length,
+      strength: s.length * WALL_MULTIPLIER
+    }));
 
     // 3. Import Columns
     const importColumns = (list) => {
@@ -222,13 +227,12 @@ const SeismicCheckPro = ({ initialData }) => {
         });
       });
     };
-
     if (data.objects) importColumns(data.objects.filter(o => o.type === 'column'));
     if (data.columns) importColumns(data.columns);
 
     setElements(newElements);
     setJsonFloorPlan(data);
-    setAiAdvice(null);
+    setChatMessages([]);
   };
 
   // --- Handlers ---
@@ -260,41 +264,30 @@ const SeismicCheckPro = ({ initialData }) => {
 
   // API Key & Local Storage Logic
   useEffect(() => {
-    // Load API Key from local storage on mount
     const savedKey = localStorage.getItem('gemini_api_key');
-    if (savedKey) {
-      setApiKey(savedKey);
-    }
+    if (savedKey) setApiKey(savedKey);
   }, []);
 
   const handleApiKeyChange = (e) => {
     const newKey = e.target.value;
     setApiKey(newKey);
-    // Save to local storage
     localStorage.setItem('gemini_api_key', newKey);
   };
 
   // Load initial data if provided
   useEffect(() => {
-    if (initialData) {
-      processJsonData(initialData);
-    }
+    if (initialData) processJsonData(initialData);
   }, [initialData]);
 
   // Convert Mouse Event to SVG Coordinates
   const getMousePos = (e) => {
     if (!containerRef.current) return { x: 0, y: 0 };
-
     const svg = containerRef.current.querySelector('svg');
     if (!svg) return { x: 0, y: 0 };
-
     const pt = svg.createSVGPoint();
     pt.x = e.clientX;
     pt.y = e.clientY;
-
     const svgP = pt.matrixTransform(svg.getScreenCTM().inverse());
-
-    // Always snap to grid in JSON mode
     const snap = 455;
     return {
       x: Math.round(svgP.x / snap) * snap,
@@ -347,19 +340,12 @@ const SeismicCheckPro = ({ initialData }) => {
     }
   };
 
-  const handleMouseMove = (e) => {
-    // Visual feedback
-  };
+  const handleMouseMove = (e) => { };
 
   const handleMouseUp = (e) => {
     if (!isDrawing || tool !== 'wall') return;
     const endPos = getMousePos(e);
-
-    const length = Math.sqrt(
-      Math.pow(endPos.x - startPos.x, 2) +
-      Math.pow(endPos.y - startPos.y, 2)
-    );
-
+    const length = Math.sqrt(Math.pow(endPos.x - startPos.x, 2) + Math.pow(endPos.y - startPos.y, 2));
     const minLen = 100;
 
     if (length > minLen) {
@@ -374,7 +360,6 @@ const SeismicCheckPro = ({ initialData }) => {
         strength: length * WALL_MULTIPLIER
       };
       setElements([...elements, newElement]);
-      if (aiAdvice) setAiAdvice(null);
     }
     setIsDrawing(false);
   };
@@ -396,41 +381,23 @@ const SeismicCheckPro = ({ initialData }) => {
           if (room.type === 'entrance' || room.type === 'corridor') fill = "#fffbeb";
 
           return (
-            <polygon
-              key={`room-${i}`}
-              points={pointsStr}
-              fill={fill}
-              stroke="#9ca3af"
-              strokeWidth="10"
-            />
+            <polygon key={`room-${i}`} points={pointsStr} fill={fill} stroke="#9ca3af" strokeWidth="10" />
           );
         })}
 
         {jsonFloorPlan.objects?.map((obj, i) => {
           if (obj.type === 'column') return null;
-
           let color = "#9ca3af";
           if (obj.type.includes('window')) { color = "#60a5fa"; }
           else if (obj.type.includes('door')) { color = "#d97706"; }
           else if (obj.type === 'kitchen' || obj.type === 'bath' || obj.type === 'toilet') { color = "#10b981"; }
 
           const transform = `rotate(${obj.rotation || 0}, ${obj.x}, ${obj.y})`;
-
           return (
             <g key={`obj-${i}`} transform={transform}>
-              <rect
-                x={obj.x - obj.width / 2}
-                y={obj.y - obj.height / 2}
-                width={obj.width}
-                height={obj.height}
-                fill="none"
-                stroke={color}
-                strokeWidth="20"
-              />
+              <rect x={obj.x - obj.width / 2} y={obj.y - obj.height / 2} width={obj.width} height={obj.height} fill="none" stroke={color} strokeWidth="20" />
               {(obj.label || obj.type === 'kitchen') && (
-                <text x={obj.x} y={obj.y} fontSize="200" textAnchor="middle" fill={color} className="select-none">
-                  {obj.label || obj.type}
-                </text>
+                <text x={obj.x} y={obj.y} fontSize="200" textAnchor="middle" fill={color} className="select-none">{obj.label || obj.type}</text>
               )}
             </g>
           );
@@ -441,11 +408,7 @@ const SeismicCheckPro = ({ initialData }) => {
 
   const renderGrid = () => {
     if (!showGrid) return null;
-
-    // Extract bounds from viewBox string
     const [vx, vy, vw, vh] = viewBox.split(' ').map(Number);
-
-    // Calculate grid lines
     const lines = [];
     const startX = Math.floor(vx / MODULE_GRID) * MODULE_GRID;
     const startY = Math.floor(vy / MODULE_GRID) * MODULE_GRID;
@@ -467,7 +430,6 @@ const SeismicCheckPro = ({ initialData }) => {
     let cx = 0;
     let cy = 0;
     const n = points.length;
-
     for (let i = 0; i < n; i++) {
       const j = (i + 1) % n;
       const cross = points[i].x * points[j].y - points[j].x * points[i].y;
@@ -475,13 +437,10 @@ const SeismicCheckPro = ({ initialData }) => {
       cx += (points[i].x + points[j].x) * cross;
       cy += (points[i].y + points[j].y) * cross;
     }
-
     area = area / 2;
     if (Math.abs(area) < 0.001) return { area: 0, cx: 0, cy: 0 };
-
     cx = cx / (6 * area);
     cy = cy / (6 * area);
-
     return { area: Math.abs(area), cx, cy };
   };
 
@@ -490,9 +449,7 @@ const SeismicCheckPro = ({ initialData }) => {
   const analysisResult = useMemo(() => {
     if (elements.length === 0) return null;
 
-    // 1. Determine bounds
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-
     elements.forEach(el => {
       if (el.type === 'wall') {
         minX = Math.min(minX, el.x1, el.x2);
@@ -520,13 +477,8 @@ const SeismicCheckPro = ({ initialData }) => {
       const COORD_SCALE = 5;
 
       jsonFloorPlan.rooms.forEach(room => {
-        const scaledPoints = room.points.map(p => ({
-          x: p.x * COORD_SCALE,
-          y: p.y * COORD_SCALE
-        }));
-
+        const scaledPoints = room.points.map(p => ({ x: p.x * COORD_SCALE, y: p.y * COORD_SCALE }));
         const { area: rArea, cx: rCx, cy: rCy } = calculatePolygonMetrics(scaledPoints);
-
         if (rArea > 0) {
           sumAx += rArea * rCx;
           sumAy += rArea * rCy;
@@ -623,12 +575,10 @@ const SeismicCheckPro = ({ initialData }) => {
     return {
       centerX, centerY,
       rigidityX, rigidityY,
-
       normCenterX: centerX,
       normCenterY: centerY,
       normRigidityX: rigidityX,
       normRigidityY: rigidityY,
-
       balanceScore,
       quantityScore,
       eccentricityX, eccentricityY,
@@ -639,24 +589,18 @@ const SeismicCheckPro = ({ initialData }) => {
   }, [elements, buildingType, jsonFloorPlan]);
 
 
-  // --- Gemini API: Advice Generation ---
-  const generateAIAdvice = async () => {
-    if (!analysisResult) return;
-    if (!apiKey) {
-      setAiError("APIキーが入力されていません。");
-      return;
-    }
+  // --- Gemini API: Chat & Advice Generation ---
 
-    setIsLoadingAI(true);
-    setAiError(null);
+  const constructSystemPrompt = () => {
+    if (!analysisResult) return "";
 
     const biasY = analysisResult.normRigidityY - analysisResult.normCenterY;
     const rigidityBiasNS = biasY < -2 ? "北側（画面上）" : biasY > 2 ? "南側（画面下）" : "中央付近";
     const weakSideNS = biasY < -2 ? "南側" : biasY > 2 ? "北側" : "なし";
 
     const biasX = analysisResult.normRigidityX - analysisResult.normCenterX;
-    const rigidityBiasEW = biasX < -2 ? "西側（画面左）" : biasX > 2 ? "東側（画面右）" : "中央付近";
-    const weakSideEW = biasX < -2 ? "東側" : biasX > 2 ? "西側" : "なし";
+    const rigidityBiasEW = biasX < -2 ? "東側（画面右）" : biasX > 2 ? "西側（画面左）" : "中央付近";
+    const weakSideEW = biasX < -2 ? "西側" : biasX > 2 ? "東側" : "なし";
 
     const northWalls = analysisResult.quadrants.tl + analysisResult.quadrants.tr;
     const southWalls = analysisResult.quadrants.bl + analysisResult.quadrants.br;
@@ -666,8 +610,7 @@ const SeismicCheckPro = ({ initialData }) => {
         ? "南側の壁量が北側より大幅に多いです。"
         : "南北の壁量は比較的バランスが取れています。";
 
-    // Prepare detailed wall and opening data strings
-    // Limit to avoid excessive prompt length, but include key info
+    // Prepare detailed wall data
     const wallDetails = elements
       .filter(el => el.type === 'wall')
       .map((el, i) => {
@@ -675,75 +618,232 @@ const SeismicCheckPro = ({ initialData }) => {
         const cy = (el.y1 + el.y2) / 2;
         const relX = cx - analysisResult.centerX;
         const relY = cy - analysisResult.centerY;
-        // Area description
         const ns = relY < 0 ? "北" : "南";
         const ew = relX < 0 ? "西" : "東";
-        const orientation = Math.abs(el.x1 - el.x2) > Math.abs(el.y1 - el.y2) ? "横(東西)" : "縦(南北)";
-        return `壁${i + 1}: ${ns}${ew}エリア, ${orientation}, 長さ${el.length.toFixed(0)}, 座標(${cx.toFixed(0)}, ${cy.toFixed(0)})`;
-      }).slice(0, 40).join('\n'); // limit items
+        return `壁${i + 1}(${ns}${ew}): 座標(${cx.toFixed(0)}, ${cy.toFixed(0)})`;
+      }).slice(0, 30).join('; ');
 
-    const openingDetails = jsonFloorPlan?.objects
-      ?.filter(obj => obj.type.includes('window') || obj.type.includes('door') || obj.type === 'entrance' || obj.type === 'opening')
-      .map((obj, i) => {
-        const relX = obj.x - analysisResult.centerX;
-        const relY = obj.y - analysisResult.centerY;
-        const ns = relY < 0 ? "北" : "南";
-        const ew = relX < 0 ? "西" : "東";
-        return `${obj.type}${i + 1}: ${ns}${ew}エリア, 幅${obj.width}, 座標(${obj.x}, ${obj.y})`;
-      }).slice(0, 40).join('\n') || "特になし";
-
-
-    const systemPrompt = `
+    return `
       あなたは経験豊富な日本の構造設計一級建築士です。
-      ユーザーが作成した間取りの簡易耐震診断結果データを元に、施主に向けて具体的でわかりやすい改善アドバイスを行ってください。
+      ユーザーが作成した間取りの耐震診断を行い、チャット形式で相談に乗ってください。
       
-      特に「剛心（強さの中心）の偏り」と「壁量の不足エリア」に着目し、具体的な方角や、提供された「壁・開口部の詳細配置データ」を参照して具体的な位置（座標や窓の近くなど）を挙げて弱点を指摘してください。
+      【現在の最新状況】
+      建物種別: ${buildingType === '2' ? '木造2階建て（1階部分）' : '木造平家'}
+      壁量充足率: ${analysisResult.quantityScore.toFixed(1)}%
+      偏心率バランススコア: ${analysisResult.balanceScore.toFixed(1)}/100
+      
+      剛心の位置: 重心より ${rigidityBiasNS}、${rigidityBiasEW} に偏心。
+      構造的弱点: ${weakSideNS}、${weakSideEW} の壁不足の懸念。
+      壁量バランス: ${wallBalanceMsg}
+      
+      壁配置データ(一部): ${wallDetails}
       
       重要なルール:
-      - 座標系は画面左上が原点、Y軸は下向きがプラスです（画面上が北、画面下が南）。
-      - 剛心が重心より「北」にある場合、建物は北側が強く、相対的に「南側」が弱点になります。逆も然りです。
-      - 提供される「判定データ」を最も信頼し、それに基づいてアドバイスを組み立ててください。
-      - 「南東にある大きな掃き出し窓（window3）付近」のように具体的に言及してください。
+      - 座標系: 画面左上が原点、Y軸は下向きがプラス（上が北、下が南）。
+      - 剛心が「北」にある場合、建物は北が強く、相対的に「南」が弱点。逆も然り。
+      - ユーザーの質問に対し、この最新データに基づいて的確にアドバイスしてください。
+      - 応答は具体的かつ建設的に。
+    `;
+  };
+
+  const handleSendMessage = async () => {
+    if (!inputMessage.trim() && chatMessages.length > 0) return;
+    if (!analysisResult) return;
+    if (!apiKey) {
+      setAiError("APIキーが入力されていません。");
+      return;
+    }
+
+    setIsLoadingAI(true);
+    setAiError(null);
+
+    const isFirstMessage = chatMessages.length === 0;
+    let userPromptText = "";
+
+    if (isFirstMessage) {
+      // Detailed prompt for initial diagnosis
+      const biasY = analysisResult.normRigidityY - analysisResult.normCenterY;
+      const rigidityBiasNS = biasY < -2 ? "北側（画面上）" : biasY > 2 ? "南側（画面下）" : "中央付近";
+      const weakSideNS = biasY < -2 ? "南側" : biasY > 2 ? "北側" : "なし";
+
+      const biasX = analysisResult.normRigidityX - analysisResult.normCenterX;
+      const rigidityBiasEW = biasX < -2 ? "東側（画面右）" : biasX > 2 ? "西側（画面左）" : "中央付近";
+      const weakSideEW = biasX < -2 ? "西側" : biasX > 2 ? "東側" : "なし";
+
+      const northWalls = analysisResult.quadrants.tl + analysisResult.quadrants.tr;
+      const southWalls = analysisResult.quadrants.bl + analysisResult.quadrants.br;
+      const wallBalanceMsg = northWalls > southWalls * 1.2
+        ? "北側の壁量が南側より大幅に多いです。"
+        : southWalls > northWalls * 1.2
+          ? "南側の壁量が北側より大幅に多いです。"
+          : "南北の壁量は比較的バランスが取れています。";
+
+      const wallDetails = elements
+        .filter(el => el.type === 'wall')
+        .map((el, i) => {
+          const cx = (el.x1 + el.x2) / 2;
+          const cy = (el.y1 + el.y2) / 2;
+          const ns = cy < analysisResult.centerY ? "北" : "南";
+          const ew = cx < analysisResult.centerX ? "西" : "東";
+          const orientation = Math.abs(el.x1 - el.x2) > Math.abs(el.y1 - el.y2) ? "横(東西)" : "縦(南北)";
+          return `壁${i + 1}: ${ns}${ew}エリア, ${orientation}, 長さ${el.length.toFixed(0)}, 座標(${cx.toFixed(0)}, ${cy.toFixed(0)})`;
+        }).slice(0, 40).join('\n');
+
+      const openingDetails = jsonFloorPlan?.objects
+        ?.filter(obj => obj.type.includes('window') || obj.type.includes('door') || obj.type === 'entrance' || obj.type === 'opening')
+        .map((obj, i) => {
+          const ns = obj.y < analysisResult.centerY ? "北" : "南";
+          const ew = obj.x < analysisResult.centerX ? "西" : "東";
+          return `${obj.type}${i + 1}: ${ns}${ew}エリア, 幅${obj.width}, 座標(${obj.x}, ${obj.y})`;
+        }).slice(0, 40).join('\n') || "特になし";
+
+      userPromptText = `
+          以下の構造計算データに基づいて診断してください。
+          建物種別: ${buildingType === '2' ? '木造2階建て（1階部分の診断）' : '木造平家'}
+          
+          【計算結果サマリー】
+          - 壁量充足率: ${analysisResult.quantityScore.toFixed(1)}% (目標値に対する充足度)
+          - 偏心率バランススコア: ${analysisResult.balanceScore.toFixed(1)}/100
+          
+          【偏心・バランス判定データ】
+          - 剛心の位置: 重心よりも **${rigidityBiasNS}**、**${rigidityBiasEW}** に偏っています。
+          - 構造的に弱い方角: **${weakSideNS}**、**${weakSideEW}** の壁が不足している、または開口部が多すぎる可能性があります。
+          - 壁量分布状況: ${wallBalanceMsg}
+          
+          【詳細数値データ】
+          - 重心位置(建物中心): (X:${analysisResult.centerX.toFixed(1)}, Y:${analysisResult.centerY.toFixed(1)})
+          - 剛心位置(強さ中心): (X:${analysisResult.rigidityX.toFixed(1)}, Y:${analysisResult.rigidityY.toFixed(1)})
+          
+          【4分割エリアの壁量スコア】
+          (数値が大きいほど壁が多い)
+          - 北西エリア: ${analysisResult.quadrants.tl.toFixed(1)}
+          - 北東エリア: ${analysisResult.quadrants.tr.toFixed(1)}
+          - 南西エリア: ${analysisResult.quadrants.bl.toFixed(1)}
+          - 南東エリア: ${analysisResult.quadrants.br.toFixed(1)}
+
+          【詳細配置データ (一部抜粋)】
+          [壁リスト]
+          ${wallDetails}
+
+          [開口部リスト]
+          ${openingDetails}
+
+          出力フォーマット:
+          1. **診断総評**: 現状の安全レベルについての率直な評価
+          2. **詳細リスク分析**: 
+             - 重心と剛心のズレから予測される地震時の挙動（ねじれ等）
+             - 壁が不足している具体的な方角と、それが開口部によるものかどうかの分析
+          3. **プロの改善案**: 
+             - 具体的にどの方角・位置に壁を追加・補強すべきか（座標や近くの窓を目印に）
+        `;
+    } else {
+      userPromptText = inputMessage;
+    }
+
+    const displayMessage = isFirstMessage
+      ? "現在の間取りの耐震診断をお願いします。"
+      : inputMessage;
+
+    const newHistory = [...chatMessages, { role: 'user', text: displayMessage }];
+    setChatMessages(newHistory);
+    setInputMessage("");
+
+    try {
+      const apiContents = newHistory.map((m, index) => {
+        if (index === 0 && isFirstMessage) {
+          return { role: m.role, parts: [{ text: userPromptText }] };
+        }
+        return { role: m.role, parts: [{ text: m.text }] };
+      });
+
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${apiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: apiContents,
+            systemInstruction: { parts: [{ text: constructSystemPrompt() }] },
+          }),
+        }
+      );
+
+      if (!response.ok) throw new Error('API request failed');
+      const data = await response.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+      if (text) {
+        setChatMessages(prev => [...prev, { role: 'model', text: text }]);
+      } else {
+        throw new Error('No advice generated');
+      }
+    } catch (error) {
+      console.error('Gemini API Error:', error);
+      setAiError('エラーが発生しました。');
+    } finally {
+      setIsLoadingAI(false);
+    }
+  };
+
+  // --- Gemini API: Auto Optimization ---
+  const optimizeStructure = async () => {
+    if (!analysisResult) return;
+    if (!apiKey) {
+      setAiError("APIキーが入力されていません。");
+      return;
+    }
+
+    setIsOptimizing(true);
+    setAiError(null);
+
+    // 1. Get All Valid Wall Candidates (Zero-based approach)
+    // This ignores current elements state and recalculates from raw JSON
+    const validCandidates = getValidWallSegments(jsonFloorPlan);
+
+    // Convert to simplified format for AI
+    const candidateList = validCandidates.map((s, i) => ({
+      id: i,
+      x1: Math.round(s.x1), y1: Math.round(s.y1),
+      x2: Math.round(s.x2), y2: Math.round(s.y2),
+      len: Math.round(s.length)
+    }));
+
+    const openingInfo = jsonFloorPlan?.objects
+      ?.filter(obj => obj.type.includes('window') || obj.type.includes('door') || obj.type === 'entrance' || obj.type === 'opening')
+      .map(obj => ({ type: obj.type, x: obj.x, y: obj.y }));
+
+    const systemPrompt = `
+      あなたは構造設計の専門家AIです。
+      与えられた「壁配置候補（Candidate Walls）」の中から、耐震性能が最適になる組み合わせを選定してください。
+      現在の壁配置は無視し、ゼロベースで考えてください。
       
-      出力フォーマット:
-      1. **診断総評**: 現状の安全レベルについての率直な評価
-      2. **詳細リスク分析**: 
-         - 重心と剛心のズレから予測される地震時の挙動（ねじれ等）
-         - 壁が不足している具体的な方角と、それが開口部によるものかどうかの分析
-      3. **プロの改善案**: 
-         - 具体的にどの方角・位置に壁を追加・補強すべきか（座標や近くの窓を目印に）
+      【目標】
+      1. 壁量充足率 100%以上 (十分な量の壁を確保)
+      2. 偏心率バランススコア 98点以上 (重心と剛心をほぼ一致させる)
+      
+      【ルール】
+      - 提供された「Candidate Walls」のリストから、耐力壁として採用する壁のIDを選んでください。
+      - 窓やドア（Openings）の位置には壁を配置しないでください（候補リストは既に考慮済みですが念のため）。
+      - バランススコア98以上が達成不可能な場合は、スコアが最も高くなる組み合わせを選び、その理由を説明してください。
+      
+      【出力フォーマット】
+      JSON形式のみで返してください。
+      {
+        "selectedWallIds": [0, 2, 5, ...], // 採用する壁のID配列
+        "reasoning": "..." // 達成できたか、できなかった場合の理由とアドバイス
+      }
     `;
 
     const userPrompt = `
-      以下の構造計算データに基づいて診断してください。
-      建物種別: ${buildingType === '2' ? '木造2階建て（1階部分の診断）' : '木造平家'}
+      以下の条件で壁配置を最適化してください。
       
-      【計算結果サマリー】
-      - 壁量充足率: ${analysisResult.quantityScore.toFixed(1)}% (目標値に対する充足度)
-      - 偏心率バランススコア: ${analysisResult.balanceScore.toFixed(1)}/100
+      【重心位置】 (X:${analysisResult.centerX}, Y:${analysisResult.centerY})
       
-      【偏心・バランス判定データ (これを最優先)】
-      - 剛心の位置: 重心よりも **${rigidityBiasNS}**、**${rigidityBiasEW}** に偏っています。
-      - 構造的に弱い方角: **${weakSideNS}**、**${weakSideEW}** の壁が不足している、または開口部が多すぎる可能性があります。
-      - 壁量分布状況: ${wallBalanceMsg}
+      【壁候補リスト (ここから選ぶ)】
+      ${JSON.stringify(candidateList)}
       
-      【詳細数値データ】
-      - 重心位置(建物中心): (X:${analysisResult.centerX.toFixed(1)}, Y:${analysisResult.centerY.toFixed(1)})
-      - 剛心位置(強さ中心): (X:${analysisResult.rigidityX.toFixed(1)}, Y:${analysisResult.rigidityY.toFixed(1)})
-      
-      【4分割エリアの壁量スコア】
-      (数値が大きいほど壁が多い)
-      - 北西エリア: ${analysisResult.quadrants.tl.toFixed(1)}
-      - 北東エリア: ${analysisResult.quadrants.tr.toFixed(1)}
-      - 南西エリア: ${analysisResult.quadrants.bl.toFixed(1)}
-      - 南東エリア: ${analysisResult.quadrants.br.toFixed(1)}
-
-      【詳細配置データ (一部抜粋)】
-      [壁リスト]
-      ${wallDetails}
-
-      [開口部リスト]
-      ${openingDetails}
+      【開口部参考データ】
+      ${JSON.stringify(openingInfo)}
     `;
 
     try {
@@ -755,6 +855,9 @@ const SeismicCheckPro = ({ initialData }) => {
           body: JSON.stringify({
             contents: [{ parts: [{ text: userPrompt }] }],
             systemInstruction: { parts: [{ text: systemPrompt }] },
+            generationConfig: {
+              responseMimeType: "application/json"
+            }
           }),
         }
       );
@@ -762,13 +865,40 @@ const SeismicCheckPro = ({ initialData }) => {
       if (!response.ok) throw new Error('API request failed');
       const data = await response.json();
       const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (text) setAiAdvice(text);
-      else throw new Error('No advice generated');
+
+      if (text) {
+        const result = JSON.parse(text);
+        if (result.selectedWallIds && Array.isArray(result.selectedWallIds)) {
+          // Reconstruct elements based on selection
+          const newElements = result.selectedWallIds.map(id => {
+            const s = validCandidates[id];
+            if (!s) return null;
+            return {
+              id: generateId(),
+              type: 'wall',
+              x1: s.x1, y1: s.y1, x2: s.x2, y2: s.y2,
+              length: s.length,
+              strength: s.length * WALL_MULTIPLIER
+            };
+          }).filter(Boolean);
+
+          // Keep columns
+          const columns = elements.filter(el => el.type === 'column');
+          setElements([...newElements, ...columns]);
+
+          // Add result message to chat
+          const resultMsg = result.reasoning
+            ? `【AI自動最適化完了】\n${result.reasoning}`
+            : "AIによる最適化が完了しました。壁の配置が更新されました。";
+
+          setChatMessages(prev => [...prev, { role: 'model', text: resultMsg }]);
+        }
+      }
     } catch (error) {
-      console.error('Gemini API Error:', error);
-      setAiError('AIアドバイスの生成に失敗しました。');
+      console.error('Optimization Error:', error);
+      setAiError('最適化中にエラーが発生しました。');
     } finally {
-      setIsLoadingAI(false);
+      setIsOptimizing(false);
     }
   };
 
@@ -793,7 +923,7 @@ const SeismicCheckPro = ({ initialData }) => {
           )}
           {(jsonFloorPlan) && (
             <button
-              onClick={() => { setJsonFloorPlan(null); setElements([]); setAiAdvice(null); }}
+              onClick={() => { setJsonFloorPlan(null); setElements([]); setChatMessages([]); }}
               className="flex items-center px-3 py-1 bg-slate-700 hover:bg-slate-600 rounded transition-colors"
             >
               <RotateCcw className="w-3 h-3 mr-1" />
@@ -907,14 +1037,14 @@ const SeismicCheckPro = ({ initialData }) => {
             <h2 className="text-xs font-bold text-gray-500 uppercase mb-3">建物設定</h2>
             <div className="flex bg-white rounded-lg border border-gray-200 p-1">
               <button
-                onClick={() => { setBuildingType('1'); setAiAdvice(null); }}
+                onClick={() => { setBuildingType('1'); setChatMessages([]); }}
                 className={`flex-1 flex items-center justify-center py-2 px-3 rounded text-sm font-medium transition-colors ${buildingType === '1' ? 'bg-emerald-100 text-emerald-800' : 'text-gray-500 hover:bg-gray-50'}`}
               >
                 <Home className="w-4 h-4 mr-2" />
                 平家
               </button>
               <button
-                onClick={() => { setBuildingType('2'); setAiAdvice(null); }}
+                onClick={() => { setBuildingType('2'); setChatMessages([]); }}
                 className={`flex-1 flex items-center justify-center py-2 px-3 rounded text-sm font-medium transition-colors ${buildingType === '2' ? 'bg-indigo-100 text-indigo-800' : 'text-gray-500 hover:bg-gray-50'}`}
               >
                 <ArrowUpCircle className="w-4 h-4 mr-2" />
@@ -1032,37 +1162,72 @@ const SeismicCheckPro = ({ initialData }) => {
                   </div>
                 </div>
 
-                {/* AI Architect Advice Section */}
-                <div className="mt-6 border-t border-gray-200 pt-4">
+                {/* AI Architect Chat Section */}
+                <div className="mt-6 border-t border-gray-200 pt-4 flex-1 flex flex-col min-h-[300px]">
                   <div className="flex items-center justify-between mb-2">
                     <h4 className="text-sm font-bold text-slate-800 flex items-center">
                       <Sparkles className="w-4 h-4 mr-1 text-purple-500" />
                       AI構造設計士レポート
                     </h4>
+                    <button
+                      onClick={() => setShowApiKeyInput(!showApiKeyInput)}
+                      className="text-gray-400 hover:text-gray-600 p-1 rounded-full hover:bg-gray-100 transition-colors"
+                      title="APIキー設定"
+                    >
+                      <Settings className="w-4 h-4" />
+                    </button>
                   </div>
 
                   {/* API Key Input */}
-                  <div className="mb-4">
-                    <label className="block text-xs font-bold text-gray-500 mb-1 flex items-center">
-                      <Key className="w-3 h-3 mr-1" />
-                      Gemini API Key
-                    </label>
-                    <input
-                      type="password"
-                      value={apiKey}
-                      onChange={handleApiKeyChange}
-                      placeholder="APIキーを入力..."
-                      className="w-full px-3 py-2 border border-gray-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-purple-500 bg-gray-50"
-                    />
-                    <p className="text-[10px] text-gray-400 mt-1">
-                      ※キーはブラウザ内にのみ保存され、外部には送信されません。
-                    </p>
+                  {showApiKeyInput && (
+                    <div className="mb-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                      <label className="block text-xs font-bold text-gray-500 mb-1 flex items-center">
+                        <Key className="w-3 h-3 mr-1" />
+                        Gemini API Key
+                      </label>
+                      <input
+                        type="password"
+                        value={apiKey}
+                        onChange={handleApiKeyChange}
+                        placeholder="APIキーを入力..."
+                        className="w-full px-3 py-2 border border-gray-300 rounded text-xs focus:outline-none focus:ring-2 focus:ring-purple-500 bg-gray-50"
+                      />
+                      <p className="text-[10px] text-gray-400 mt-1">
+                        ※キーはブラウザ内にのみ保存され、外部には送信されません。
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="space-y-2 mb-4">
+                    {/* Optimize Button */}
+                    <button
+                      onClick={optimizeStructure}
+                      disabled={isLoadingAI || isOptimizing}
+                      className="w-full py-2 px-4 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-lg text-sm font-bold shadow-sm transition-all flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed group"
+                    >
+                      {isOptimizing ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          最適化計算中...
+                        </>
+                      ) : (
+                        <>
+                          <Wand2 className="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" />
+                          AI自動最適化 🛠️
+                        </>
+                      )}
+                    </button>
                   </div>
 
-                  {!aiAdvice ? (
-                    <div className="bg-purple-50 p-4 rounded-xl border border-purple-100 text-center">
+                  {/* Chat Area */}
+                  {chatMessages.length === 0 ? (
+                    <div className="bg-purple-50 p-4 rounded-xl border border-purple-100 text-center flex-1 flex flex-col justify-center items-center">
+                      <p className="text-xs text-purple-700 mb-3">
+                        現在の配置データを元に、AIが詳細な診断と改善アドバイスを行います。<br />
+                        チャットで追加の質問も可能です。
+                      </p>
                       <button
-                        onClick={generateAIAdvice}
+                        onClick={() => handleSendMessage()}
                         disabled={isLoadingAI}
                         className="w-full py-2 px-4 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm font-bold shadow-sm transition-all flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
                       >
@@ -1083,15 +1248,48 @@ const SeismicCheckPro = ({ initialData }) => {
                       )}
                     </div>
                   ) : (
-                    <div className="bg-white p-4 rounded-xl border border-purple-200 shadow-sm relative animate-in fade-in duration-500">
-                      <button
-                        onClick={() => setAiAdvice(null)}
-                        className="absolute top-2 right-2 text-gray-400 hover:text-gray-600"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                      <div className="prose prose-sm prose-purple max-w-none text-xs leading-relaxed text-gray-700 whitespace-pre-wrap">
-                        {aiAdvice}
+                    <div className="flex flex-col flex-1 h-[400px]">
+                      <div className="flex-1 overflow-y-auto bg-slate-50 rounded-xl border border-slate-200 p-3 mb-2 space-y-3">
+                        {chatMessages.map((msg, idx) => (
+                          <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                            <div className={`max-w-[85%] rounded-lg p-3 text-xs whitespace-pre-wrap ${msg.role === 'user' ? 'bg-purple-600 text-white' : 'bg-white border border-gray-200 text-gray-700 shadow-sm'}`}>
+                              {msg.text}
+                            </div>
+                          </div>
+                        ))}
+                        {isLoadingAI && (
+                          <div className="flex justify-start">
+                            <div className="bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
+                              <Loader2 className="w-4 h-4 text-purple-500 animate-spin" />
+                            </div>
+                          </div>
+                        )}
+                        <div ref={messagesEndRef} />
+                      </div>
+
+                      {/* Input Area */}
+                      <div className="flex items-start gap-2">
+                        <textarea
+                          value={inputMessage}
+                          onChange={(e) => setInputMessage(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                              e.preventDefault();
+                              handleSendMessage();
+                            }
+                          }}
+                          placeholder="Ctrl + Enter で送信"
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none"
+                          rows={2}
+                          disabled={isLoadingAI}
+                        />
+                        <button
+                          onClick={() => handleSendMessage()}
+                          disabled={isLoadingAI || (!inputMessage.trim())}
+                          className="p-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors mt-1"
+                        >
+                          <Send className="w-4 h-4" />
+                        </button>
                       </div>
                     </div>
                   )}
