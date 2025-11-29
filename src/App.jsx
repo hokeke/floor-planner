@@ -1443,17 +1443,22 @@ function App() {
 
       {isSeismicModalOpen && (
         <div className="fixed inset-0 z-[9999] bg-black bg-opacity-50 flex items-center justify-center p-4">
-          <div className="bg-white w-full h-full max-w-[95vw] max-h-[95vh] rounded-lg shadow-xl overflow-hidden relative flex flex-col">
+          <div className="relative w-full max-w-[95vw] h-[96vh] flex flex-col">
+            {/* Close Button - Positioned outside the content container */}
             <button
               onClick={() => setIsSeismicModalOpen(false)}
-              className="absolute top-4 right-4 z-50 p-2 bg-white rounded-full shadow-md hover:bg-gray-100"
+              className="absolute -top-6 -right-5 z-50 p-2 text-white hover:text-gray-300 transition-colors"
+              title="閉じる"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18"></line>
                 <line x1="6" y1="6" x2="18" y2="18"></line>
               </svg>
             </button>
-            <SeismicCheckPro initialData={seismicData} />
+
+            <div className="bg-white w-full h-full rounded-lg shadow-xl overflow-hidden flex flex-col">
+              <SeismicCheckPro initialData={seismicData} />
+            </div>
           </div>
         </div>
       )}

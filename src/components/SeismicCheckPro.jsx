@@ -230,13 +230,19 @@ const SeismicCheckPro = ({ initialData }) => {
   useEffect(() => {
     const savedKey = localStorage.getItem('gemini_api_key');
     if (savedKey) setApiKey(savedKey);
-    if (initialData) processJsonData(initialData);
-  }, [initialData]);
+  }, []);
 
   const handleApiKeyChange = (e) => {
     setApiKey(e.target.value);
     localStorage.setItem('gemini_api_key', e.target.value);
   };
+
+  // Load initial data if provided
+  useEffect(() => {
+    if (initialData) {
+      processJsonData(initialData);
+    }
+  }, [initialData]);
 
   const getMousePos = (e) => {
     if (!containerRef.current) return { x: 0, y: 0 };
@@ -564,7 +570,7 @@ const SeismicCheckPro = ({ initialData }) => {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50 text-slate-800 font-sans">
+    <div className={`flex flex-col ${initialData ? 'h-full' : 'h-screen'} bg-gray-50 text-slate-800 font-sans`}>
       <header className="bg-slate-900 text-white p-4 shadow flex justify-between items-center z-10">
         <div className="flex items-center gap-2"><Shield className="w-6 h-6 text-emerald-400" /><h1 className="font-bold">耐震AIチェッカー Pro</h1></div>
         {!jsonFloorPlan ? (
