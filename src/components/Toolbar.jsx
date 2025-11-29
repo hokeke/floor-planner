@@ -1,5 +1,6 @@
 import React from 'react';
 import { ROOM_TYPES, OBJECT_TYPES } from '../constants';
+import { MousePointer2, Square, Grid, Box, Hexagon, Armchair, ZoomIn, Save, Upload, Activity } from 'lucide-react';
 
 function Toolbar({
   tool,
@@ -18,97 +19,151 @@ function Toolbar({
   onOpenSeismicCheck
 }) {
   return (
-    <header className="toolbar text-sm" style={{ display: 'flex', flexWrap: 'nowrap', alignItems: 'center', gap: '10px', padding: '10px', borderBottom: '1px solid #ccc', overflowX: 'auto' }}>
-      <h1 style={{ margin: 0, marginRight: '20px', fontSize: '1.2rem' }}>間取り作成 (Floor Plan)</h1>
-      <div className="tools" style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', alignItems: 'center' }}>
-        <button
-          className={tool === 'select' ? 'active' : ''}
-          onClick={() => setTool('select')}
-          style={{ padding: '8px 12px', cursor: 'pointer', backgroundColor: tool === 'select' ? '#ddd' : '#f0f0f0', border: '1px solid #ccc', borderRadius: '4px' }}
-        >
-          選択 (Select)
-        </button>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+    <header className="bg-white border-b border-slate-200 px-4 py-2 flex items-center justify-between shadow-sm z-20 relative h-[60px]">
+      <div className="flex items-center gap-6">
+        <h1 className="text-lg font-bold text-slate-700 flex items-center gap-2">
+          <Grid className="w-5 h-5 text-indigo-600" />
+          <span>間取り作成</span>
+        </h1>
+
+        <div className="flex items-center gap-2 border-l border-slate-200 pl-6">
+          {/* Select Tool */}
           <button
-            className={tool === 'room' ? 'active' : ''}
-            onClick={() => setTool('room')}
-            style={{ padding: '8px 12px', cursor: 'pointer', backgroundColor: tool === 'room' ? '#ddd' : '#f0f0f0', border: '1px solid #ccc', borderRadius: '4px' }}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${tool === 'select'
+                ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                : 'text-slate-600 hover:bg-slate-50 border border-transparent'
+              }`}
+            onClick={() => setTool('select')}
           >
-            部屋作成 (Room)
+            <MousePointer2 className="w-4 h-4" />
+            選択
           </button>
-          {tool === 'room' && (
-            <select
-              value={activeRoomType}
-              onChange={(e) => setActiveRoomType(e.target.value)}
-              style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
+
+          {/* Room Tool */}
+          <div className="flex items-center gap-1 bg-slate-50 rounded-md p-1 border border-slate-200">
+            <button
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-sm text-sm font-medium transition-colors ${tool === 'room'
+                  ? 'bg-white text-indigo-700 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+                }`}
+              onClick={() => setTool('room')}
             >
-              {ROOM_TYPES.map(type => (
-                <option key={type.id} value={type.id}>{type.label}</option>
-              ))}
-            </select>
-          )}
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <Square className="w-4 h-4" />
+              部屋
+            </button>
+            {tool === 'room' && (
+              <select
+                value={activeRoomType}
+                onChange={(e) => setActiveRoomType(e.target.value)}
+                className="text-sm border-none bg-transparent focus:ring-0 text-slate-700 font-medium cursor-pointer py-1 pl-2 pr-8"
+              >
+                {ROOM_TYPES.map(type => (
+                  <option key={type.id} value={type.id}>{type.label}</option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          {/* Wall Tool */}
+          <div className="flex items-center gap-1 bg-slate-50 rounded-md p-1 border border-slate-200">
+            <button
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-sm text-sm font-medium transition-colors ${tool === 'wall'
+                  ? 'bg-white text-indigo-700 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+                }`}
+              onClick={() => setTool('wall')}
+            >
+              <Box className="w-4 h-4" />
+              壁・柱
+            </button>
+            {tool === 'wall' && (
+              <select
+                value={activeWallMode}
+                onChange={(e) => setActiveWallMode(e.target.value)}
+                className="text-sm border-none bg-transparent focus:ring-0 text-slate-700 font-medium cursor-pointer py-1 pl-2 pr-8"
+              >
+                <option value="wall">壁</option>
+                <option value="column">柱</option>
+              </select>
+            )}
+          </div>
+
+          {/* Polygon Tool */}
           <button
-            className={tool === 'wall' ? 'active' : ''}
-            onClick={() => setTool('wall')}
-            style={{ padding: '8px 12px', cursor: 'pointer', backgroundColor: tool === 'wall' ? '#ddd' : '#f0f0f0', border: '1px solid #ccc', borderRadius: '4px' }}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${tool === 'custom_object'
+                ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                : 'text-slate-600 hover:bg-slate-50 border border-transparent'
+              }`}
+            onClick={() => setTool('custom_object')}
           >
-            壁作成 (Wall)
+            <Hexagon className="w-4 h-4" />
+            多角形
           </button>
-          {tool === 'wall' && (
-            <select
-              value={activeWallMode}
-              onChange={(e) => setActiveWallMode(e.target.value)}
-              style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
+
+          {/* Object Tool */}
+          <div className="flex items-center gap-1 bg-slate-50 rounded-md p-1 border border-slate-200">
+            <button
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-sm text-sm font-medium transition-colors ${tool === 'object'
+                  ? 'bg-white text-indigo-700 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+                }`}
+              onClick={() => setTool('object')}
             >
-              <option value="wall">壁 (Wall)</option>
-              <option value="column">柱 (Column)</option>
-            </select>
-          )}
-        </div>
-        <button
-          className={tool === 'custom_object' ? 'active' : ''}
-          onClick={() => setTool('custom_object')}
-          style={{ padding: '8px 12px', cursor: 'pointer', backgroundColor: tool === 'custom_object' ? '#ddd' : '#f0f0f0', border: '1px solid #ccc', borderRadius: '4px' }}
-        >
-          多角形 (Polygon)
-        </button>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-          <button
-            className={tool === 'object' ? 'active' : ''}
-            onClick={() => setTool('object')}
-            style={{ padding: '8px 12px', cursor: 'pointer', backgroundColor: tool === 'object' ? '#ddd' : '#f0f0f0', border: '1px solid #ccc', borderRadius: '4px' }}
-          >
-            設備・家具 (Object)
-          </button>
-          {tool === 'object' && (
-            <select
-              value={activeObjectType}
-              onChange={(e) => setActiveObjectType(e.target.value)}
-              style={{ padding: '8px', borderRadius: '4px', border: '1px solid #ccc' }}
-            >
-              {OBJECT_TYPES.map(type => (
-                <option key={type.id} value={type.id}>{type.label}</option>
-              ))}
-            </select>
-          )}
+              <Armchair className="w-4 h-4" />
+              設備
+            </button>
+            {tool === 'object' && (
+              <select
+                value={activeObjectType}
+                onChange={(e) => setActiveObjectType(e.target.value)}
+                className="text-sm border-none bg-transparent focus:ring-0 text-slate-700 font-medium cursor-pointer py-1 pl-2 pr-8"
+              >
+                {OBJECT_TYPES.map(type => (
+                  <option key={type.id} value={type.id}>{type.label}</option>
+                ))}
+              </select>
+            )}
+          </div>
         </div>
       </div>
-      <div className="zoom-controls" style={{ marginLeft: 'auto', display: 'flex', gap: '10px', alignItems: 'center' }}>
-        <span>Zoom: {Math.round(scale * 100)}%</span>
-        <button onClick={() => { setScale(1); setPan({ x: 0, y: 0 }); }} style={{ padding: '5px 10px', cursor: 'pointer' }}>Reset</button>
-      </div>
-      <div className="drive-controls" style={{ marginLeft: '10px', display: 'flex', gap: '10px', alignItems: 'center', borderLeft: '1px solid #ccc', paddingLeft: '10px' }}>
-        <button onClick={onSave} style={{ padding: '5px 10px', cursor: 'pointer', backgroundColor: '#e6f7ff', border: '1px solid #1890ff', borderRadius: '4px', color: '#1890ff' }}>
-          Save
-        </button>
-        <button onClick={onLoad} style={{ padding: '5px 10px', cursor: 'pointer', backgroundColor: '#f6ffed', border: '1px solid #52c41a', borderRadius: '4px', color: '#52c41a' }}>
-          Load
-        </button>
-        <button onClick={onOpenSeismicCheck} style={{ padding: '5px 10px', cursor: 'pointer', backgroundColor: '#fff7e6', border: '1px solid #fa8c16', borderRadius: '4px', color: '#fa8c16' }}>
-          耐震チェック
-        </button>
+
+      <div className="flex items-center gap-4">
+        {/* Zoom Controls */}
+        <div className="flex items-center gap-2 text-sm text-slate-600 bg-slate-50 px-3 py-1.5 rounded-full border border-slate-200">
+          <ZoomIn className="w-4 h-4 text-slate-400" />
+          <span className="font-mono">{Math.round(scale * 100)}%</span>
+          <button
+            onClick={() => { setScale(1); setPan({ x: 0, y: 0 }); }}
+            className="text-xs text-indigo-600 hover:text-indigo-800 font-medium ml-2"
+          >
+            Reset
+          </button>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex items-center gap-2 border-l border-slate-200 pl-4">
+          <button
+            onClick={onSave}
+            className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-300 text-slate-700 rounded-md text-sm font-medium hover:bg-slate-50 transition-colors shadow-sm"
+          >
+            <Save className="w-4 h-4" />
+            保存
+          </button>
+          <button
+            onClick={onLoad}
+            className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-300 text-slate-700 rounded-md text-sm font-medium hover:bg-slate-50 transition-colors shadow-sm"
+          >
+            <Upload className="w-4 h-4" />
+            読込
+          </button>
+          <button
+            onClick={onOpenSeismicCheck}
+            className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-md text-sm font-bold hover:from-amber-600 hover:to-orange-600 transition-all shadow-sm hover:shadow-md"
+          >
+            <Activity className="w-4 h-4" />
+            耐震チェック
+          </button>
+        </div>
       </div>
     </header>
   );

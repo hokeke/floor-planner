@@ -1049,7 +1049,7 @@ function App() {
   };
 
   return (
-    <div className="app-container">
+    <div className="flex flex-col h-screen overflow-hidden bg-slate-50">
       <Toolbar
         tool={tool}
         setTool={setTool}
@@ -1094,349 +1094,351 @@ function App() {
         />
       )}
 
-      <main className="canvas-container">
-        <svg
-          ref={svgRef}
-          width="100%"
-          height="100%"
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseUp}
-          onDoubleClick={handleDoubleClick}
-          className="drawing-canvas"
-          style={{ cursor: isPanning ? 'grabbing' : (tool === 'room' || tool === 'wall' ? 'crosshair' : 'default') }}
-        >
-          <defs>
-            <pattern
-              id="subgrid"
-              width={mmToPx(455)}
-              height={mmToPx(455)}
-              patternUnits="userSpaceOnUse"
-              patternTransform={`translate(${pan.x}, ${pan.y}) scale(${scale})`}
-            >
-              <path
-                d={`M ${mmToPx(455)} 0 L 0 0 0 ${mmToPx(455)}`}
-                fill="none"
-                stroke="#e0e0e0"
-                strokeWidth="1"
-                vectorEffect="non-scaling-stroke"
-              />
-            </pattern>
-            <pattern
-              id="grid"
-              width={mmToPx(910)}
-              height={mmToPx(910)}
-              patternUnits="userSpaceOnUse"
-              patternTransform={`translate(${pan.x}, ${pan.y}) scale(${scale})`}
-            >
-              <path
-                d={`M ${mmToPx(910)} 0 L 0 0 0 ${mmToPx(910)}`}
-                fill="none"
-                stroke="#bdbdbd"
-                strokeWidth="2"
-                vectorEffect="non-scaling-stroke"
-              />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#subgrid)" />
-          <rect width="100%" height="100%" fill="url(#grid)" pointerEvents="none" />
+      <div className="flex flex-1 overflow-hidden">
+        <main className="flex-1 relative bg-slate-50 overflow-hidden cursor-crosshair">
+          <svg
+            ref={svgRef}
+            width="100%"
+            height="100%"
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+            onDoubleClick={handleDoubleClick}
+            className="drawing-canvas"
+            style={{ cursor: isPanning ? 'grabbing' : (tool === 'room' || tool === 'wall' ? 'crosshair' : 'default') }}
+          >
+            <defs>
+              <pattern
+                id="subgrid"
+                width={mmToPx(455)}
+                height={mmToPx(455)}
+                patternUnits="userSpaceOnUse"
+                patternTransform={`translate(${pan.x}, ${pan.y}) scale(${scale})`}
+              >
+                <path
+                  d={`M ${mmToPx(455)} 0 L 0 0 0 ${mmToPx(455)}`}
+                  fill="none"
+                  stroke="#e0e0e0"
+                  strokeWidth="1"
+                  vectorEffect="non-scaling-stroke"
+                />
+              </pattern>
+              <pattern
+                id="grid"
+                width={mmToPx(910)}
+                height={mmToPx(910)}
+                patternUnits="userSpaceOnUse"
+                patternTransform={`translate(${pan.x}, ${pan.y}) scale(${scale})`}
+              >
+                <path
+                  d={`M ${mmToPx(910)} 0 L 0 0 0 ${mmToPx(910)}`}
+                  fill="none"
+                  stroke="#bdbdbd"
+                  strokeWidth="2"
+                  vectorEffect="non-scaling-stroke"
+                />
+              </pattern>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#subgrid)" />
+            <rect width="100%" height="100%" fill="url(#grid)" pointerEvents="none" />
 
-          <g transform={`translate(${pan.x}, ${pan.y}) scale(${scale})`}>
-            {/* Render UNSELECTED rooms first (Background) */}
-            {rooms.filter(r => r.id !== selectedRoomId).map(room => {
-              const pointsStr = room.points.map(p => `${p.x},${p.y}`).join(' ');
-              const roomType = ROOM_TYPES.find(t => t.id === room.type) || ROOM_TYPES[1]; // Default to Western
+            <g transform={`translate(${pan.x}, ${pan.y}) scale(${scale})`}>
+              {/* Render UNSELECTED rooms first (Background) */}
+              {rooms.filter(r => r.id !== selectedRoomId).map(room => {
+                const pointsStr = room.points.map(p => `${p.x},${p.y}`).join(' ');
+                const roomType = ROOM_TYPES.find(t => t.id === room.type) || ROOM_TYPES[1]; // Default to Western
 
-              return (
-                <g key={room.id}>
-                  <polygon
-                    points={pointsStr}
-                    fill={roomType.color}
-                    fillOpacity={0.8}
-                    stroke="none"
-                  />
-                  {/* Highlight hovered edge */}
-                  {hoveredRoomEdge && hoveredRoomEdge.roomId === room.id && (
-                    <line
-                      x1={room.points[hoveredRoomEdge.edgeIndex].x}
-                      y1={room.points[hoveredRoomEdge.edgeIndex].y}
-                      x2={room.points[(hoveredRoomEdge.edgeIndex + 1) % room.points.length].x}
-                      y2={room.points[(hoveredRoomEdge.edgeIndex + 1) % room.points.length].y}
-                      stroke="blue"
-                      strokeWidth={4 / scale}
-                      strokeLinecap="round"
-                      pointerEvents="none"
+                return (
+                  <g key={room.id}>
+                    <polygon
+                      points={pointsStr}
+                      fill={roomType.color}
+                      fillOpacity={0.8}
+                      stroke="none"
                     />
-                  )}
-                  {/* Vertices (Only show if not selected - maybe simpler to not show vertices for unselected rooms?) */}
-                  {/* For now, keep vertices hidden for unselected rooms to reduce clutter, or show them if needed. 
+                    {/* Highlight hovered edge */}
+                    {hoveredRoomEdge && hoveredRoomEdge.roomId === room.id && (
+                      <line
+                        x1={room.points[hoveredRoomEdge.edgeIndex].x}
+                        y1={room.points[hoveredRoomEdge.edgeIndex].y}
+                        x2={room.points[(hoveredRoomEdge.edgeIndex + 1) % room.points.length].x}
+                        y2={room.points[(hoveredRoomEdge.edgeIndex + 1) % room.points.length].y}
+                        stroke="blue"
+                        strokeWidth={4 / scale}
+                        strokeLinecap="round"
+                        pointerEvents="none"
+                      />
+                    )}
+                    {/* Vertices (Only show if not selected - maybe simpler to not show vertices for unselected rooms?) */}
+                    {/* For now, keep vertices hidden for unselected rooms to reduce clutter, or show them if needed. 
                       Original code didn't show vertices for unselected rooms in the same way. 
                       Let's just add the label. */}
 
-                  {/* Room Label */}
+                    {/* Room Label */}
 
-                </g>
-              );
-            })}
+                  </g>
+                );
+              })}
 
-            {/* Objects (Furniture/Fixtures - Rendered BELOW walls) */}
-            {objects.filter(obj => {
-              const typeDef = OBJECT_TYPES.find(t => t.id === obj.type);
-              // Render if it's a custom object (no typeDef) or if it's not an opening
-              return !typeDef || typeDef.type !== 'opening';
-            }).sort((a, b) => (a.id === selectedObjectId ? 1 : b.id === selectedObjectId ? -1 : 0)).map(obj => (
-              <ObjectRenderer
-                key={obj.id}
-                obj={obj}
-                isSelected={obj.id === selectedObjectId}
-                scale={scale}
-                onHandleMouseDown={handleHandleMouseDown}
-                onObjectMouseDown={handleObjectMouseDown}
-              />
-            ))}
+              {/* Objects (Furniture/Fixtures - Rendered BELOW walls) */}
+              {objects.filter(obj => {
+                const typeDef = OBJECT_TYPES.find(t => t.id === obj.type);
+                // Render if it's a custom object (no typeDef) or if it's not an opening
+                return !typeDef || typeDef.type !== 'opening';
+              }).sort((a, b) => (a.id === selectedObjectId ? 1 : b.id === selectedObjectId ? -1 : 0)).map(obj => (
+                <ObjectRenderer
+                  key={obj.id}
+                  obj={obj}
+                  isSelected={obj.id === selectedObjectId}
+                  scale={scale}
+                  onHandleMouseDown={handleHandleMouseDown}
+                  onObjectMouseDown={handleObjectMouseDown}
+                />
+              ))}
 
-            {/* Walls */}
-            {[...walls].sort((a, b) => (a.id === selectedWallId ? 1 : b.id === selectedWallId ? -1 : 0)).map(wall => {
-              const isSelected = wall.id === selectedWallId;
-              return (
-                <g key={wall.id}>
-                  <line
-                    x1={wall.start.x}
-                    y1={wall.start.y}
-                    x2={wall.end.x}
-                    y2={wall.end.y}
-                    stroke={isSelected ? "red" : "black"}
-                    strokeWidth={mmToPx(100)} // 100mm wall thickness
-                    strokeLinecap="square"
-                  />
-                  {isSelected && (
-                    <>
-                      <circle
-                        cx={wall.start.x}
-                        cy={wall.start.y}
-                        r={5 / scale}
-                        fill="white"
-                        stroke="red"
-                        strokeWidth={2 / scale}
-                        style={{ cursor: 'pointer' }}
-                        onMouseDown={(e) => {
-                          e.stopPropagation();
-                          setDraggingWallHandle({ wallId: wall.id, handle: 'start' });
-                        }}
-                      />
-                      <circle
-                        cx={wall.end.x}
-                        cy={wall.end.y}
-                        r={5 / scale}
-                        fill="white"
-                        stroke="red"
-                        strokeWidth={2 / scale}
-                        style={{ cursor: 'pointer' }}
-                        onMouseDown={(e) => {
-                          e.stopPropagation();
-                          setDraggingWallHandle({ wallId: wall.id, handle: 'end' });
-                        }}
-                      />
-                    </>
-                  )}
-                </g>
-              );
-            })}
-
-            {/* Objects (Openings: Doors/Windows - Rendered ABOVE walls) */}
-            {objects.filter(obj => {
-              const typeDef = OBJECT_TYPES.find(t => t.id === obj.type);
-              return typeDef && typeDef.type === 'opening';
-            }).sort((a, b) => (a.id === selectedObjectId ? 1 : b.id === selectedObjectId ? -1 : 0)).map(obj => (
-              <ObjectRenderer
-                key={obj.id}
-                obj={obj}
-                isSelected={obj.id === selectedObjectId}
-                scale={scale}
-                onHandleMouseDown={handleHandleMouseDown}
-                onObjectMouseDown={handleObjectMouseDown}
-              />
-            ))}
-
-            {/* Render SELECTED room last (Foreground, on top of walls) */}
-            {rooms.filter(r => r.id === selectedRoomId).map(room => {
-              const pointsStr = room.points.map(p => `${p.x},${p.y}`).join(' ');
-              const roomType = ROOM_TYPES.find(t => t.id === room.type) || ROOM_TYPES[1];
-
-              return (
-                <g key={room.id}>
-                  <polygon
-                    points={pointsStr}
-                    fill="rgba(100, 149, 237, 0.5)"
-                    fillOpacity={0.5}
-                    stroke="none"
-                  />
-                  {/* Selection highlight */}
-                  <polygon
-                    points={pointsStr}
-                    fill="none"
-                    stroke="orange"
-                    strokeWidth={3 / scale}
-                  />
-                  {/* Highlight hovered edge */}
-                  {hoveredRoomEdge && hoveredRoomEdge.roomId === room.id && (
+              {/* Walls */}
+              {[...walls].sort((a, b) => (a.id === selectedWallId ? 1 : b.id === selectedWallId ? -1 : 0)).map(wall => {
+                const isSelected = wall.id === selectedWallId;
+                return (
+                  <g key={wall.id}>
                     <line
-                      x1={room.points[hoveredRoomEdge.edgeIndex].x}
-                      y1={room.points[hoveredRoomEdge.edgeIndex].y}
-                      x2={room.points[(hoveredRoomEdge.edgeIndex + 1) % room.points.length].x}
-                      y2={room.points[(hoveredRoomEdge.edgeIndex + 1) % room.points.length].y}
-                      stroke="blue"
-                      strokeWidth={4 / scale}
-                      strokeLinecap="round"
-                      pointerEvents="stroke"
+                      x1={wall.start.x}
+                      y1={wall.start.y}
+                      x2={wall.end.x}
+                      y2={wall.end.y}
+                      stroke={isSelected ? "red" : "black"}
+                      strokeWidth={mmToPx(100)} // 100mm wall thickness
+                      strokeLinecap="square"
                     />
-                  )}
-                  {/* Vertices */}
-                  {room.points.map((p, i) => (
-                    <circle
-                      key={i}
-                      cx={p.x}
-                      cy={p.y}
-                      r={5 / scale}
-                      fill="white"
-                      stroke="blue"
-                      strokeWidth={2 / scale}
-                      style={{ cursor: 'pointer' }}
-                      onMouseDown={(e) => {
-                        e.stopPropagation();
-                        setDraggingVertex({ roomId: room.id, pointIndex: i });
-                      }}
-                      onDoubleClick={(e) => {
-                        e.stopPropagation(); // Prevent adding a vertex when removing one
-                        if (room.points.length > 3) {
-                          const newPoints = room.points.filter((_, index) => index !== i);
-                          setRooms(rooms.map(r => r.id === room.id ? { ...r, points: newPoints } : r));
-                        } else {
-                          showSnackbar('Cannot remove vertex: Room must have at least 3 points', 'error');
-                        }
-                      }}
+                    {isSelected && (
+                      <>
+                        <circle
+                          cx={wall.start.x}
+                          cy={wall.start.y}
+                          r={5 / scale}
+                          fill="white"
+                          stroke="red"
+                          strokeWidth={2 / scale}
+                          style={{ cursor: 'pointer' }}
+                          onMouseDown={(e) => {
+                            e.stopPropagation();
+                            setDraggingWallHandle({ wallId: wall.id, handle: 'start' });
+                          }}
+                        />
+                        <circle
+                          cx={wall.end.x}
+                          cy={wall.end.y}
+                          r={5 / scale}
+                          fill="white"
+                          stroke="red"
+                          strokeWidth={2 / scale}
+                          style={{ cursor: 'pointer' }}
+                          onMouseDown={(e) => {
+                            e.stopPropagation();
+                            setDraggingWallHandle({ wallId: wall.id, handle: 'end' });
+                          }}
+                        />
+                      </>
+                    )}
+                  </g>
+                );
+              })}
+
+              {/* Objects (Openings: Doors/Windows - Rendered ABOVE walls) */}
+              {objects.filter(obj => {
+                const typeDef = OBJECT_TYPES.find(t => t.id === obj.type);
+                return typeDef && typeDef.type === 'opening';
+              }).sort((a, b) => (a.id === selectedObjectId ? 1 : b.id === selectedObjectId ? -1 : 0)).map(obj => (
+                <ObjectRenderer
+                  key={obj.id}
+                  obj={obj}
+                  isSelected={obj.id === selectedObjectId}
+                  scale={scale}
+                  onHandleMouseDown={handleHandleMouseDown}
+                  onObjectMouseDown={handleObjectMouseDown}
+                />
+              ))}
+
+              {/* Render SELECTED room last (Foreground, on top of walls) */}
+              {rooms.filter(r => r.id === selectedRoomId).map(room => {
+                const pointsStr = room.points.map(p => `${p.x},${p.y}`).join(' ');
+                const roomType = ROOM_TYPES.find(t => t.id === room.type) || ROOM_TYPES[1];
+
+                return (
+                  <g key={room.id}>
+                    <polygon
+                      points={pointsStr}
+                      fill="rgba(100, 149, 237, 0.5)"
+                      fillOpacity={0.5}
+                      stroke="none"
                     />
-                  ))}
-                  {/* Room Label */}
+                    {/* Selection highlight */}
+                    <polygon
+                      points={pointsStr}
+                      fill="none"
+                      stroke="orange"
+                      strokeWidth={3 / scale}
+                    />
+                    {/* Highlight hovered edge */}
+                    {hoveredRoomEdge && hoveredRoomEdge.roomId === room.id && (
+                      <line
+                        x1={room.points[hoveredRoomEdge.edgeIndex].x}
+                        y1={room.points[hoveredRoomEdge.edgeIndex].y}
+                        x2={room.points[(hoveredRoomEdge.edgeIndex + 1) % room.points.length].x}
+                        y2={room.points[(hoveredRoomEdge.edgeIndex + 1) % room.points.length].y}
+                        stroke="blue"
+                        strokeWidth={4 / scale}
+                        strokeLinecap="round"
+                        pointerEvents="stroke"
+                      />
+                    )}
+                    {/* Vertices */}
+                    {room.points.map((p, i) => (
+                      <circle
+                        key={i}
+                        cx={p.x}
+                        cy={p.y}
+                        r={5 / scale}
+                        fill="white"
+                        stroke="blue"
+                        strokeWidth={2 / scale}
+                        style={{ cursor: 'pointer' }}
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          setDraggingVertex({ roomId: room.id, pointIndex: i });
+                        }}
+                        onDoubleClick={(e) => {
+                          e.stopPropagation(); // Prevent adding a vertex when removing one
+                          if (room.points.length > 3) {
+                            const newPoints = room.points.filter((_, index) => index !== i);
+                            setRooms(rooms.map(r => r.id === room.id ? { ...r, points: newPoints } : r));
+                          } else {
+                            showSnackbar('Cannot remove vertex: Room must have at least 3 points', 'error');
+                          }
+                        }}
+                      />
+                    ))}
+                    {/* Room Label */}
 
-                </g>
-              );
-            })}
+                  </g>
+                );
+              })}
 
-            {/* Room Labels (Rendered ABOVE everything) */}
-            {rooms.map(room => {
-              if (room.type === 'corridor') return null; // Skip label for corridor
+              {/* Room Labels (Rendered ABOVE everything) */}
+              {rooms.map(room => {
+                if (room.type === 'corridor') return null; // Skip label for corridor
 
-              const roomType = ROOM_TYPES.find(t => t.id === room.type) || ROOM_TYPES[1];
+                const roomType = ROOM_TYPES.find(t => t.id === room.type) || ROOM_TYPES[1];
 
-              // Calculate center for text using centroid
-              const centroid = getPolygonCentroid(room.points);
-              const pointsMm = room.points.map(p => ({ x: pxToMm(p.x), y: pxToMm(p.y) }));
-              const area = calculateArea(pointsMm);
+                // Calculate center for text using centroid
+                const centroid = getPolygonCentroid(room.points);
+                const pointsMm = room.points.map(p => ({ x: pxToMm(p.x), y: pxToMm(p.y) }));
+                const area = calculateArea(pointsMm);
 
-              const labelText = room.type === 'free' ? (room.customLabel || '') : roomType.label;
+                const labelText = room.type === 'free' ? (room.customLabel || '') : roomType.label;
 
-              return (
-                <text
-                  key={`label-${room.id}`}
-                  x={centroid.x}
-                  y={centroid.y}
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                  fontSize={14 / scale}
-                  pointerEvents="none"
-                  fill="#333"
-                  style={{ userSelect: 'none' }}
-                >
-                  <tspan x={centroid.x} dy="-0.6em">{labelText}</tspan>
-                  <tspan x={centroid.x} dy="1.2em">{area.tatami.toFixed(1)}畳</tspan>
-                </text>
-              );
-            })}
+                return (
+                  <text
+                    key={`label-${room.id}`}
+                    x={centroid.x}
+                    y={centroid.y}
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    fontSize={14 / scale}
+                    pointerEvents="none"
+                    fill="#333"
+                    style={{ userSelect: 'none' }}
+                  >
+                    <tspan x={centroid.x} dy="-0.6em">{labelText}</tspan>
+                    <tspan x={centroid.x} dy="1.2em">{area.tatami.toFixed(1)}畳</tspan>
+                  </text>
+                );
+              })}
 
-            {/* Dimension Annotations */}
-            <DimensionAnnotations
-              walls={walls}
-              scale={scale}
-              pan={pan}
-            />
-
-            {currentWall && (
-              <line
-                x1={currentWall.start.x}
-                y1={currentWall.start.y}
-                x2={currentWall.end.x}
-                y2={currentWall.end.y}
-                stroke="black"
-                strokeWidth={mmToPx(100)}
-                strokeLinecap="square"
-                opacity="0.5"
+              {/* Dimension Annotations */}
+              <DimensionAnnotations
+                walls={walls}
+                scale={scale}
+                pan={pan}
               />
-            )}
 
-            {currentRoom && (
-              <g>
-                <polyline
-                  points={currentRoom.points.map(p => `${p.x},${p.y}`).join(' ')}
-                  fill="none"
-                  stroke="royalblue"
-                  strokeWidth={2 / scale}
-                />
-                {/* Rubber band line */}
+              {currentWall && (
                 <line
-                  x1={currentRoom.points[currentRoom.points.length - 1].x}
-                  y1={currentRoom.points[currentRoom.points.length - 1].y}
-                  x2={mousePos.x}
-                  y2={mousePos.y}
-                  stroke="royalblue"
-                  strokeWidth={1 / scale}
-                  strokeDasharray={`${5 / scale},${5 / scale}`}
+                  x1={currentWall.start.x}
+                  y1={currentWall.start.y}
+                  x2={currentWall.end.x}
+                  y2={currentWall.end.y}
+                  stroke="black"
+                  strokeWidth={mmToPx(100)}
+                  strokeLinecap="square"
+                  opacity="0.5"
                 />
-              </g>
-            )}
+              )}
 
-            {currentCustomObject && (
-              <g>
-                <polyline
-                  points={currentCustomObject.points.map(p => `${p.x},${p.y}`).join(' ')}
-                  fill="none"
-                  stroke="#666"
-                  strokeWidth={2 / scale}
-                />
-                {/* Rubber band line */}
-                <line
-                  x1={currentCustomObject.points[currentCustomObject.points.length - 1].x}
-                  y1={currentCustomObject.points[currentCustomObject.points.length - 1].y}
-                  x2={mousePos.x}
-                  y2={mousePos.y}
-                  stroke="#666"
-                  strokeWidth={1 / scale}
-                  strokeDasharray={`${5 / scale},${5 / scale}`}
-                />
-              </g>
-            )}
-          </g>
-        </svg>
-      </main>
+              {currentRoom && (
+                <g>
+                  <polyline
+                    points={currentRoom.points.map(p => `${p.x},${p.y}`).join(' ')}
+                    fill="none"
+                    stroke="royalblue"
+                    strokeWidth={2 / scale}
+                  />
+                  {/* Rubber band line */}
+                  <line
+                    x1={currentRoom.points[currentRoom.points.length - 1].x}
+                    y1={currentRoom.points[currentRoom.points.length - 1].y}
+                    x2={mousePos.x}
+                    y2={mousePos.y}
+                    stroke="royalblue"
+                    strokeWidth={1 / scale}
+                    strokeDasharray={`${5 / scale},${5 / scale}`}
+                  />
+                </g>
+              )}
 
-      <PropertiesPanel
-        rooms={rooms}
-        setRooms={setRooms}
-        walls={walls}
-        setWalls={setWalls}
-        objects={objects}
-        setObjects={setObjects}
-        scale={scale}
-        selectedRoomId={selectedRoomId}
-        setSelectedRoomId={setSelectedRoomId}
-        selectedWallId={selectedWallId}
-        setSelectedWallId={setSelectedWallId}
-        selectedObjectId={selectedObjectId}
-        setSelectedObjectId={setSelectedObjectId}
-        selectedRoomArea={selectedRoomArea}
-        totalArea={totalArea}
-      />
+              {currentCustomObject && (
+                <g>
+                  <polyline
+                    points={currentCustomObject.points.map(p => `${p.x},${p.y}`).join(' ')}
+                    fill="none"
+                    stroke="#666"
+                    strokeWidth={2 / scale}
+                  />
+                  {/* Rubber band line */}
+                  <line
+                    x1={currentCustomObject.points[currentCustomObject.points.length - 1].x}
+                    y1={currentCustomObject.points[currentCustomObject.points.length - 1].y}
+                    x2={mousePos.x}
+                    y2={mousePos.y}
+                    stroke="#666"
+                    strokeWidth={1 / scale}
+                    strokeDasharray={`${5 / scale},${5 / scale}`}
+                  />
+                </g>
+              )}
+            </g>
+          </svg>
+        </main>
+
+        <PropertiesPanel
+          rooms={rooms}
+          setRooms={setRooms}
+          walls={walls}
+          setWalls={setWalls}
+          objects={objects}
+          setObjects={setObjects}
+          scale={scale}
+          selectedRoomId={selectedRoomId}
+          setSelectedRoomId={setSelectedRoomId}
+          selectedWallId={selectedWallId}
+          setSelectedWallId={setSelectedWallId}
+          selectedObjectId={selectedObjectId}
+          setSelectedObjectId={setSelectedObjectId}
+          selectedRoomArea={selectedRoomArea}
+          totalArea={totalArea}
+        />
+      </div>
 
 
       {isSeismicModalOpen && (
