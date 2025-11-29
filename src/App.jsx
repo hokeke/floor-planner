@@ -70,7 +70,7 @@ function App() {
   const [selectedObjectId, setSelectedObjectId] = useState(null);
   const [draggingRoomId, setDraggingRoomId] = useState(null);
   const [dragStartPos, setDragStartPos] = useState(null); // World coordinates
-  const [tool, setTool] = useState('room'); // 'room', 'select', 'wall'
+  const [tool, setTool] = useState('select'); // 'room', 'select', 'wall'
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 }); // Track mouse for rubber band
 
   const [activeRoomType, setActiveRoomType] = useState('western'); // Default type for new rooms
