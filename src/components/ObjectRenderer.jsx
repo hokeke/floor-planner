@@ -120,7 +120,7 @@ const ObjectRenderer = ({ obj, isSelected, scale, onHandleMouseDown, onObjectMou
         </text>
       )}
       {isSelected && (
-        <g>
+        <g transform={`translate(0, ${type === 'door' ? -heightPx / 2 : 0})`}>
           <rect x={-widthPx / 2 - 5} y={-heightPx / 2 - 5} width={widthPx + 10} height={heightPx + 10} fill="none" stroke="blue" strokeWidth={2 / scale} strokeDasharray="5,5" />
           {/* Rotation Handle */}
           <line x1={0} y1={-heightPx / 2} x2={0} y2={-heightPx / 2 - 30 / scale} stroke="blue" strokeWidth={1 / scale} />
