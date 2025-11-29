@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { Upload, Activity, Shield, AlertTriangle, CheckCircle, Info, Move, MousePointer2, Trash2, RotateCcw, X, Home, ArrowUpCircle, Sparkles, Loader2, FileJson, Key, Settings, Send, Layers, Wand2, Network } from 'lucide-react';
+import { Upload, Activity, Shield, AlertTriangle, CheckCircle, Info, Move, MousePointer2, Trash2, RotateCcw, X, Home, ArrowUpCircle, Sparkles, Loader2, FileJson, Key, Settings, Send, Layers, Wand2, Network, Calculator } from 'lucide-react';
 
 // --- Logic Extraction: Pure Calculation Function ---
 const calculateAnalysis = (elements, buildingType, jsonFloorPlan) => {
@@ -174,6 +174,7 @@ const SeismicCheckPro = ({ initialData }) => {
   const [isLoadingAI, setIsLoadingAI] = useState(false);
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [isSimulatingBeams, setIsSimulatingBeams] = useState(false); // 梁シミュレーション中
+  const [isCalculatingStress, setIsCalculatingStress] = useState(false); // 許容応力度計算中
   const [aiError, setAiError] = useState(null);
 
   const messagesEndRef = useRef(null);
@@ -620,6 +621,85 @@ const SeismicCheckPro = ({ initialData }) => {
     }
   };
 
+  // --- New Function: Allowable Stress Calculation Simulation ---
+  const calculateAllowableStress = async () => {
+    if (!elements.length || !apiKey) { setAiError("APIキーまたは構造データが不足しています"); return; }
+    if (!beams.length) { setAiError("梁のデータがありません。先に「梁シミュレーション」を行ってください。"); return; }
+
+    setIsCalculatingStress(true);
+    setAiError(null);
+
+    const walls = elements.filter(e => e.type === 'wall').map(e => ({ x1: Math.round(e.x1), y1: Math.round(e.y1), x2: Math.round(e.x2), y2: Math.round(e.y2), multiplier: e.multiplier }));
+    const columns = elements.filter(e => e.type === 'column').map(e => ({ x: Math.round(e.x), y: Math.round(e.y) }));
+
+    const systemPrompt = `
+      あなたは木造住宅の許容応力度計算を行う専門家AIです。
+      ユーザーから提供される「壁」「柱」「梁」の配置データに基づき、簡易的な許容応力度計算のシミュレーションを行ってください。
+
+      【計算・評価のポイント】
+      1. **長期荷重**: 梁のたわみ、曲げ応力が許容範囲内か。スパンが長い梁や、柱を受けている梁（梁上柱）に注意。
+      2. **短期荷重（地震・風）**: 耐力壁の負担剪断力、柱の引抜力（N値計算相当）、梁の接合部にかかる力。
+      3. **判定**: 各部材について「OK」「NG」「注意」を判定し、検定比（応力/許容応力）を推定してください（目安で可）。
+
+      【出力フォーマット】
+      JSON形式のみ:
+      {
+        "overallResult": "OK" | "NG" | "Warning", // 総合判定
+        "summary": "...", // 全体的な評価コメント
+        "checkPoints": [
+          { "item": "梁の曲げ", "status": "OK", "ratio": 0.6, "comment": "..." },
+          { "item": "梁のたわみ", "status": "Warning", "ratio": 0.95, "comment": "..." },
+          { "item": "柱の座屈", "status": "OK", "ratio": 0.4, "comment": "..." },
+          // ... その他必要な項目
+        ],
+        "weakPoints": [ // 具体的に危険な箇所（座標や部材IDで指定）
+          { "location": "X:3640, Y:1820付近", "issue": "梁スパンが飛びすぎているためたわみが懸念されます。" }
+        ]
+      }
+    `;
+
+    const userPrompt = `
+      以下の構造モデルについて許容応力度計算を行ってください。
+      【壁データ】${JSON.stringify(walls)}
+      【柱データ】${JSON.stringify(columns)}
+      【梁データ】${JSON.stringify(beams)}
+    `;
+
+    try {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${apiKey}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: userPrompt }] }],
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          generationConfig: { responseMimeType: "application/json" }
+        })
+      });
+      const data = await res.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (text) {
+        const result = JSON.parse(text);
+
+        // Construct result message
+        let msg = `【許容応力度計算結果】判定: ${result.overallResult}\n\n${result.summary}\n\n`;
+        result.checkPoints?.forEach(cp => {
+          const icon = cp.status === 'OK' ? '✅' : cp.status === 'NG' ? '❌' : '⚠️';
+          msg += `${icon} ${cp.item} (検定比: ${cp.ratio}): ${cp.comment}\n`;
+        });
+        if (result.weakPoints?.length > 0) {
+          msg += `\n📍 重点指摘事項:\n`;
+          result.weakPoints.forEach(wp => msg += `- ${wp.location}: ${wp.issue}\n`);
+        }
+
+        setChatMessages(prev => [...prev, { role: 'model', text: msg }]);
+      }
+    } catch (e) {
+      console.error(e);
+      setAiError("計算中にエラーが発生しました。");
+    } finally {
+      setIsCalculatingStress(false);
+    }
+  };
+
   // Render Grid
   const renderGrid = () => {
     if (!showGrid) return null;
@@ -760,6 +840,7 @@ const SeismicCheckPro = ({ initialData }) => {
                   <p>剛心K: ({analysisResult.rigidityX.toFixed(0)}, {analysisResult.rigidityY.toFixed(0)})</p>
                 </div>
 
+                {/* Chat & Optimization & Beam Sim */}
                 <div className="border-t pt-3">
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-xs font-bold">AI建築士チャット</span>
@@ -770,18 +851,24 @@ const SeismicCheckPro = ({ initialData }) => {
                   )}
 
                   <div className="grid grid-cols-2 gap-2 mb-2">
-                    <button onClick={() => generateAIAdvice("詳細な診断をお願いします。")} disabled={isLoadingAI || isOptimizing || isSimulatingBeams} className="py-2 px-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold shadow-sm flex items-center justify-center disabled:opacity-50">
+                    <button onClick={() => generateAIAdvice("詳細な診断をお願いします。")} disabled={isLoadingAI || isOptimizing || isSimulatingBeams || isCalculatingStress} className="py-2 px-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold shadow-sm flex items-center justify-center disabled:opacity-50">
                       {isLoadingAI ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Sparkles className="w-3 h-3 mr-1" />} 詳細アドバイス
                     </button>
 
-                    <button onClick={optimizeStructure} disabled={isLoadingAI || isOptimizing || isSimulatingBeams} className="py-2 px-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-lg text-xs font-bold shadow-sm flex items-center justify-center disabled:opacity-50">
+                    <button onClick={optimizeStructure} disabled={isLoadingAI || isOptimizing || isSimulatingBeams || isCalculatingStress} className="py-2 px-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-lg text-xs font-bold shadow-sm flex items-center justify-center disabled:opacity-50">
                       {isOptimizing ? <><Loader2 className="w-3 h-3 mr-1 animate-spin" />最適化中...</> : <><Wand2 className="w-3 h-3 mr-1" />AI自動最適化</>}
                     </button>
                   </div>
 
-                  <button onClick={simulateBeamLayout} disabled={isLoadingAI || isOptimizing || isSimulatingBeams} className="w-full mb-2 py-2 px-4 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white rounded-lg text-xs font-bold shadow-sm flex items-center justify-center disabled:opacity-50">
-                    {isSimulatingBeams ? <><Loader2 className="w-3 h-3 mr-2 animate-spin" />梁シミュレーション中...</> : <><Network className="w-3 h-3 mr-2" />梁掛けシミュレーション</>}
-                  </button>
+                  <div className="grid grid-cols-2 gap-2 mb-2">
+                    <button onClick={simulateBeamLayout} disabled={isLoadingAI || isOptimizing || isSimulatingBeams || isCalculatingStress} className="py-2 px-2 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white rounded-lg text-xs font-bold shadow-sm flex items-center justify-center disabled:opacity-50">
+                      {isSimulatingBeams ? <><Loader2 className="w-3 h-3 mr-1 animate-spin" />梁シミュ...</> : <><Network className="w-3 h-3 mr-1" />梁掛けシミュ</>}
+                    </button>
+
+                    <button onClick={calculateAllowableStress} disabled={isLoadingAI || isOptimizing || isSimulatingBeams || isCalculatingStress} className="py-2 px-2 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white rounded-lg text-xs font-bold shadow-sm flex items-center justify-center disabled:opacity-50">
+                      {isCalculatingStress ? <><Loader2 className="w-3 h-3 mr-1 animate-spin" />計算中...</> : <><Calculator className="w-3 h-3 mr-1" />許容応力度計算</>}
+                    </button>
+                  </div>
 
                   <div className="h-48 overflow-y-auto bg-gray-50 rounded p-2 mb-2 border text-xs space-y-2">
                     {chatMessages.map((m, i) => (
@@ -789,7 +876,7 @@ const SeismicCheckPro = ({ initialData }) => {
                         <span className={`inline-block p-2 rounded ${m.role === 'user' ? 'bg-purple-600 text-white' : 'bg-white border whitespace-pre-wrap'}`}>{m.text}</span>
                       </div>
                     ))}
-                    {(isLoadingAI || isSimulatingBeams) && <Loader2 className="w-4 h-4 animate-spin mx-auto" />}
+                    {(isLoadingAI || isSimulatingBeams || isCalculatingStress) && <Loader2 className="w-4 h-4 animate-spin mx-auto" />}
                     <div ref={messagesEndRef} />
                   </div>
                   <div className="flex gap-1">
