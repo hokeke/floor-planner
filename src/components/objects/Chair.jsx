@@ -5,7 +5,7 @@ const Chair = ({ width, height, scale }) => {
   // Using a viewBox of -20 -20 40 40 to cover the drawing area comfortably.
 
   return (
-    <g transform={`scale(${width / 40}, ${height / 40})`}>
+    <g transform={`scale(${width / 30}, ${height / 30})`}>
       {/* Fill Layer */}
       <path
         fill="#D6CCAB"

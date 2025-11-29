@@ -6,7 +6,7 @@ const Window = ({ width, height, strokeWidth }) => {
   // The provided SVG had a rotation, but the paths are horizontal.
   // We will use the horizontal orientation as default.
 
-  const nativeWidth = 160;
+  const nativeWidth = 130;
   const nativeHeight = 10;
 
   const scaleX = width / nativeWidth;
