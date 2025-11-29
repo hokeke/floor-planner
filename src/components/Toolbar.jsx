@@ -14,7 +14,8 @@ function Toolbar({
   setScale,
   setPan,
   onSave,
-  onLoad
+  onLoad,
+  onOpenSeismicCheck
 }) {
   return (
     <header className="toolbar text-sm" style={{ display: 'flex', flexWrap: 'nowrap', alignItems: 'center', gap: '10px', padding: '10px', borderBottom: '1px solid #ccc', overflowX: 'auto' }}>
@@ -104,6 +105,9 @@ function Toolbar({
         </button>
         <button onClick={onLoad} style={{ padding: '5px 10px', cursor: 'pointer', backgroundColor: '#f6ffed', border: '1px solid #52c41a', borderRadius: '4px', color: '#52c41a' }}>
           Load
+        </button>
+        <button onClick={onOpenSeismicCheck} style={{ padding: '5px 10px', cursor: 'pointer', backgroundColor: '#fff7e6', border: '1px solid #fa8c16', borderRadius: '4px', color: '#fa8c16' }}>
+          耐震チェック
         </button>
       </div>
     </header>

@@ -10,6 +10,7 @@ import { ROOM_TYPES, OBJECT_TYPES } from './constants';
 import ObjectRenderer from './components/ObjectRenderer';
 import Snackbar from './components/Snackbar';
 import DimensionAnnotations from './components/DimensionAnnotations';
+import SeismicCheckPro from './components/SeismicCheckPro';
 import './index.css';
 
 function App() {
@@ -24,6 +25,8 @@ function App() {
   const [isDrawing, setIsDrawing] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
   const [lastMousePos, setLastMousePos] = useState(null);
+  const [isSeismicModalOpen, setIsSeismicModalOpen] = useState(false);
+  const [seismicData, setSeismicData] = useState(null);
 
   const svgRef = useRef(null);
 
@@ -1061,6 +1064,17 @@ function App() {
         setPan={setPan}
         onSave={handleSave}
         onLoad={handleLoad}
+        onOpenSeismicCheck={() => {
+          const data = {
+            version: 1,
+            timestamp: Date.now(),
+            rooms,
+            walls,
+            objects
+          };
+          setSeismicData(data);
+          setIsSeismicModalOpen(true);
+        }}
       />
 
       {/* Hidden file input for loading */}
@@ -1423,6 +1437,24 @@ function App() {
         selectedRoomArea={selectedRoomArea}
         totalArea={totalArea}
       />
+
+
+      {isSeismicModalOpen && (
+        <div className="fixed inset-0 z-[9999] bg-black bg-opacity-50 flex items-center justify-center p-4">
+          <div className="bg-white w-full h-full max-w-[95vw] max-h-[95vh] rounded-lg shadow-xl overflow-hidden relative flex flex-col">
+            <button
+              onClick={() => setIsSeismicModalOpen(false)}
+              className="absolute top-4 right-4 z-50 p-2 bg-white rounded-full shadow-md hover:bg-gray-100"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+            <SeismicCheckPro initialData={seismicData} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
