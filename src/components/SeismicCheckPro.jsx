@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useMemo, useEffect } from 'react';
-import { Upload, Activity, Shield, AlertTriangle, CheckCircle, Info, Move, MousePointer2, Trash2, RotateCcw, X, Home, ArrowUpCircle, Sparkles, Loader2, FileJson, Key, Settings, Send, Layers, Wand2 } from 'lucide-react';
+import { Upload, Activity, Shield, AlertTriangle, CheckCircle, Info, Move, MousePointer2, Trash2, RotateCcw, X, Home, ArrowUpCircle, Sparkles, Loader2, FileJson, Key, Settings, Send, Layers, Wand2, Network } from 'lucide-react';
 
 // --- Logic Extraction: Pure Calculation Function ---
 const calculateAnalysis = (elements, buildingType, jsonFloorPlan) => {
@@ -152,6 +152,7 @@ const SeismicCheckPro = ({ initialData }) => {
   // State
   const [jsonFloorPlan, setJsonFloorPlan] = useState(null);
   const [elements, setElements] = useState([]);
+  const [beams, setBeams] = useState([]); // 梁のデータ
   const [tool, setTool] = useState('wall');
   const [wallMultiplier, setWallMultiplier] = useState(2.5);
   const [buildingType, setBuildingType] = useState('1');
@@ -159,6 +160,7 @@ const SeismicCheckPro = ({ initialData }) => {
   const [startPos, setStartPos] = useState({ x: 0, y: 0 });
   const [showAnalysis, setShowAnalysis] = useState(true);
   const [showGrid, setShowGrid] = useState(true);
+  const [showBeams, setShowBeams] = useState(true); // 梁の表示切替
 
   const [viewBox, setViewBox] = useState("0 0 100 100");
 
@@ -171,6 +173,7 @@ const SeismicCheckPro = ({ initialData }) => {
   const [inputMessage, setInputMessage] = useState("");
   const [isLoadingAI, setIsLoadingAI] = useState(false);
   const [isOptimizing, setIsOptimizing] = useState(false);
+  const [isSimulatingBeams, setIsSimulatingBeams] = useState(false); // 梁シミュレーション中
   const [aiError, setAiError] = useState(null);
 
   const messagesEndRef = useRef(null);
@@ -310,6 +313,7 @@ const SeismicCheckPro = ({ initialData }) => {
     setElements(newElements);
     setJsonFloorPlan(data);
     setChatMessages([]);
+    setBeams([]); // Reset beams
   };
 
   // Handlers
@@ -377,7 +381,6 @@ const SeismicCheckPro = ({ initialData }) => {
     }
   };
 
-  // Added handleMouseMove
   const handleMouseMove = (e) => { };
 
   const handleMouseUp = (e) => {
@@ -450,7 +453,6 @@ const SeismicCheckPro = ({ initialData }) => {
     } catch (e) { setAiError("通信エラー"); } finally { setIsLoadingAI(false); }
   };
 
-  // Enhanced Optimization with Retry Logic
   const optimizeStructure = async () => {
     if (!analysisResult || !apiKey) { setAiError("APIキーを入力してください"); return; }
     setIsOptimizing(true);
@@ -461,10 +463,9 @@ const SeismicCheckPro = ({ initialData }) => {
       id: i, x1: Math.round(s.x1), y1: Math.round(s.y1), x2: Math.round(s.x2), y2: Math.round(s.y2), len: Math.round(s.length)
     }));
 
-    // Constants for logic
     const MAX_RETRIES = 3;
     let bestElements = null;
-    let bestScore = -1; // Higher is better. We can use balanceScore + quantityScore? Or prioritize balance.
+    let bestScore = -1;
     let bestReasoning = "";
     let bestMetrics = null;
     let tryCount = 0;
@@ -474,11 +475,6 @@ const SeismicCheckPro = ({ initialData }) => {
 
     while (tryCount < MAX_RETRIES && !targetReached) {
       tryCount++;
-
-      // Prompt context slightly different? Or just rely on temperature randomness.
-      // For simplicity, same prompt, Gemini's variability handles the rest.
-      // We could add "Try attempt #${tryCount}" to prompt to vary it if needed, but usually not necessary with temperature.
-
       const systemPrompt = `
           あなたは構造設計の専門家AIです。
           与えられた「壁配置候補（Candidate Walls）」の中から、耐震性能が最適になる組み合わせを選定してください。
@@ -495,7 +491,6 @@ const SeismicCheckPro = ({ initialData }) => {
           【出力フォーマット】
           JSON形式のみ: { "selectedWallIds": [...], "reasoning": "..." }
         `;
-
       const userPrompt = `
           条件:
           - 壁倍率: ${wallMultiplier}倍
@@ -512,7 +507,6 @@ const SeismicCheckPro = ({ initialData }) => {
             generationConfig: { responseMimeType: "application/json" }
           })
         });
-
         const data = await res.json();
         const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
         if (text) {
@@ -529,49 +523,101 @@ const SeismicCheckPro = ({ initialData }) => {
                 strength: s.length * wallMultiplier
               };
             }).filter(Boolean);
-
             const testElements = [...generatedElements, ...cols];
             const metrics = calculateAnalysis(testElements, buildingType, jsonFloorPlan);
-
-            // Evaluation Score: Balance is priority (0-100), then quantity bonus
-            // Just using balanceScore is good for eccentricity, but we need quantity too.
-            // Let's say Score = BalanceScore (if Quantity >= 100) else BalanceScore * (Quantity/100)
             let currentScore = metrics.balanceScore;
-            if (metrics.quantityScore < 100) {
-              currentScore = currentScore * (metrics.quantityScore / 100);
-            }
-
-            // Save if better
+            if (metrics.quantityScore < 100) currentScore = currentScore * (metrics.quantityScore / 100);
             if (currentScore > bestScore) {
               bestScore = currentScore;
               bestElements = testElements;
               bestReasoning = result.reasoning;
               bestMetrics = metrics;
             }
-
-            // Check Target: Balance > 98 AND Quantity >= 100
-            if (metrics.balanceScore >= 98 && metrics.quantityScore >= 100) {
-              targetReached = true;
-            }
+            if (metrics.balanceScore >= 98 && metrics.quantityScore >= 100) targetReached = true;
           }
         }
-      } catch (e) {
-        console.error("Optimization Attempt Failed", e);
-      }
+      } catch (e) { console.error("Optimization Attempt Failed", e); }
     }
 
-    // Apply Best Result
     if (bestElements) {
       setElements(bestElements);
-
       const systemMsg = `【自動最適化完了】 (試行回数: ${tryCount})\n\nAI思考: ${bestReasoning}\n\n📊 実測結果:\n- 最大偏心率: ${bestMetrics.maxRe.toFixed(3)}\n- バランススコア: ${bestMetrics.balanceScore.toFixed(0)}/100\n- 壁量充足率: ${bestMetrics.quantityScore.toFixed(0)}%`;
-
       setChatMessages(prev => [...prev, { role: 'model', text: systemMsg }]);
     } else {
       setAiError("最適化に失敗しました。");
     }
-
     setIsOptimizing(false);
+  };
+
+  // --- New Function: Beam Layout Simulation ---
+  const simulateBeamLayout = async () => {
+    if (!elements.length || !apiKey) { setAiError("APIキーまたは構造データが不足しています"); return; }
+    setIsSimulatingBeams(true);
+    setAiError(null);
+
+    // 1. Extract current structure data for AI
+    const walls = elements.filter(e => e.type === 'wall').map(e => ({ x1: Math.round(e.x1), y1: Math.round(e.y1), x2: Math.round(e.x2), y2: Math.round(e.y2) }));
+    const columns = elements.filter(e => e.type === 'column').map(e => ({ x: Math.round(e.x), y: Math.round(e.y) }));
+
+    // Extract room shapes to help understand layout
+    const roomShapes = jsonFloorPlan?.rooms?.map((r, i) => {
+      const COORD_SCALE = 5;
+      return r.points.map(p => ({ x: Math.round(p.x * COORD_SCALE), y: Math.round(p.y * COORD_SCALE) }));
+    });
+
+    const systemPrompt = `
+      あなたは木造住宅の構造設計の専門家です。
+      与えられた壁・柱・部屋の配置データから、最適な「梁伏図（はりぶせず）」を作成してください。
+      
+      【設計ルール】
+      1. 梁は、柱と柱、柱と壁、壁と壁を直線で結ぶように配置してください。
+      2. **【重要】梁のスパン（長さ）は、極力「2間（約3640mm）」以内に収めるようにしてください。** 長大スパンを避けるため、必要に応じて短い梁を連続させたり、直交する梁で支えるなどの工夫をしてください。
+      3. 荷重を支える主要な「大梁（Main Beam）」と、それを補完する「小梁（Sub Beam）」を区別してください。
+      4. 座標系は画面左上(0,0)、Y軸下向きプラスです。梁はグリッド（910mmモジュール）に乗るのが望ましいです。
+      5. **【最重要】全ての梁の始点と終点は、必ず何らかの支持点（柱、壁、または他の梁）の上に載るようにしてください。空中に浮いた端点を作らないでください。**
+      6. **【最重要】独立した梁（どこにも接続していない梁）は禁止です。梁全体で一つの強固なグリッド状の構造を形成してください。**
+      
+      【出力フォーマット】
+      JSON形式のみ:
+      {
+        "beams": [
+          { "x1": number, "y1": number, "x2": number, "y2": number, "type": "main" }, // type: "main" or "sub"
+          ...
+        ]
+      }
+    `;
+
+    const userPrompt = `
+      以下の構造データに基づいて梁を配置してください。
+      【壁データ】${JSON.stringify(walls)}
+      【柱データ】${JSON.stringify(columns)}
+      【部屋形状（参考）】${JSON.stringify(roomShapes)}
+    `;
+
+    try {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${apiKey}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: userPrompt }] }],
+          systemInstruction: { parts: [{ text: systemPrompt }] },
+          generationConfig: { responseMimeType: "application/json" }
+        })
+      });
+      const data = await res.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (text) {
+        const result = JSON.parse(text);
+        if (result.beams) {
+          setBeams(result.beams);
+          setChatMessages(prev => [...prev, { role: 'model', text: `【梁シミュレーション完了】\n${result.beams.length}本の梁を配置しました。` }]);
+        }
+      }
+    } catch (e) {
+      console.error(e);
+      setAiError("梁シミュレーション中にエラーが発生しました。");
+    } finally {
+      setIsSimulatingBeams(false);
+    }
   };
 
   // Render Grid
@@ -591,7 +637,7 @@ const SeismicCheckPro = ({ initialData }) => {
         {!jsonFloorPlan ? (
           <button onClick={() => fileInputRef.current.click()} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded text-sm flex gap-2"><Upload className="w-4 h-4" />ファイルを開く</button>
         ) : (
-          <button onClick={() => { setJsonFloorPlan(null); setElements([]); }} className="px-3 py-1 bg-slate-700 rounded text-sm flex gap-2"><RotateCcw className="w-3 h-3" />リセット</button>
+          <button onClick={() => { setJsonFloorPlan(null); setElements([]); setBeams([]); }} className="px-3 py-1 bg-slate-700 rounded text-sm flex gap-2"><RotateCcw className="w-3 h-3" />リセット</button>
         )}
       </header>
 
@@ -616,6 +662,19 @@ const SeismicCheckPro = ({ initialData }) => {
                   if (o.type === 'column') return null;
                   return <g key={`obj-${i}`} transform={`rotate(${o.rotation || 0},${o.x},${o.y})`}><rect x={o.x - o.width / 2} y={o.y - o.height / 2} width={o.width} height={o.height} fill="none" stroke="#cbd5e1" strokeWidth="20" /></g>;
                 })}
+
+                {/* Beams Layer */}
+                {showBeams && beams.map((beam, i) => (
+                  <line
+                    key={`beam-${i}`}
+                    x1={beam.x1} y1={beam.y1} x2={beam.x2} y2={beam.y2}
+                    stroke={beam.type === 'main' ? '#059669' : '#34d399'} // Emerald green for beams
+                    strokeWidth={beam.type === 'main' ? 60 : 30}
+                    strokeDasharray={beam.type === 'main' ? "" : "40,20"}
+                    strokeLinecap="round"
+                    opacity="0.8"
+                  />
+                ))}
 
                 {elements.map(el => {
                   if (el.type === 'wall') {
@@ -662,12 +721,14 @@ const SeismicCheckPro = ({ initialData }) => {
               </div>
             </div>
 
-            <div className="flex gap-4 text-xs text-gray-600">
+            <div className="flex gap-4 text-xs text-gray-600 mb-4">
               <label className="flex items-center cursor-pointer"><input type="checkbox" checked={showAnalysis} onChange={e => setShowAnalysis(e.target.checked)} className="mr-1" /> 重心・剛心</label>
               <label className="flex items-center cursor-pointer"><input type="checkbox" checked={showGrid} onChange={e => setShowGrid(e.target.checked)} className="mr-1" /> グリッド</label>
+              <label className="flex items-center cursor-pointer"><input type="checkbox" checked={showBeams} onChange={e => setShowBeams(e.target.checked)} className="mr-1" /> 梁(シミュ)</label>
             </div>
           </div>
 
+          {/* Analysis Report */}
           <div className="flex-1 p-4">
             <h2 className="text-xs font-bold text-gray-400 mb-3">構造診断レポート (精密版)</h2>
             {analysisResult ? (
@@ -708,12 +769,18 @@ const SeismicCheckPro = ({ initialData }) => {
                     <input type="password" value={apiKey} onChange={e => { setApiKey(e.target.value); localStorage.setItem('gemini_api_key', e.target.value) }} placeholder="Gemini API Key" className="w-full text-xs border p-1 rounded mb-2" />
                   )}
 
-                  <button onClick={() => generateAIAdvice("詳細な診断をお願いします。")} disabled={isLoadingAI || isOptimizing} className="w-full mb-2 py-2 px-4 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold shadow-sm flex items-center justify-center disabled:opacity-50">
-                    {isLoadingAI ? <Loader2 className="w-3 h-3 mr-2 animate-spin" /> : <Sparkles className="w-3 h-3 mr-2" />} 詳細アドバイスを生成
-                  </button>
+                  <div className="grid grid-cols-2 gap-2 mb-2">
+                    <button onClick={() => generateAIAdvice("詳細な診断をお願いします。")} disabled={isLoadingAI || isOptimizing || isSimulatingBeams} className="py-2 px-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold shadow-sm flex items-center justify-center disabled:opacity-50">
+                      {isLoadingAI ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Sparkles className="w-3 h-3 mr-1" />} 詳細アドバイス
+                    </button>
 
-                  <button onClick={optimizeStructure} disabled={isLoadingAI || isOptimizing} className="w-full mb-2 py-2 px-4 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-lg text-xs font-bold shadow-sm flex items-center justify-center disabled:opacity-50 group">
-                    {isOptimizing ? <><Loader2 className="w-3 h-3 mr-2 animate-spin" />最適化計算中...</> : <><Wand2 className="w-3 h-3 mr-2 group-hover:scale-110 transition-transform" />AI自動最適化</>}
+                    <button onClick={optimizeStructure} disabled={isLoadingAI || isOptimizing || isSimulatingBeams} className="py-2 px-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-lg text-xs font-bold shadow-sm flex items-center justify-center disabled:opacity-50">
+                      {isOptimizing ? <><Loader2 className="w-3 h-3 mr-1 animate-spin" />最適化中...</> : <><Wand2 className="w-3 h-3 mr-1" />AI自動最適化</>}
+                    </button>
+                  </div>
+
+                  <button onClick={simulateBeamLayout} disabled={isLoadingAI || isOptimizing || isSimulatingBeams} className="w-full mb-2 py-2 px-4 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white rounded-lg text-xs font-bold shadow-sm flex items-center justify-center disabled:opacity-50">
+                    {isSimulatingBeams ? <><Loader2 className="w-3 h-3 mr-2 animate-spin" />梁シミュレーション中...</> : <><Network className="w-3 h-3 mr-2" />梁掛けシミュレーション</>}
                   </button>
 
                   <div className="h-48 overflow-y-auto bg-gray-50 rounded p-2 mb-2 border text-xs space-y-2">
@@ -722,7 +789,7 @@ const SeismicCheckPro = ({ initialData }) => {
                         <span className={`inline-block p-2 rounded ${m.role === 'user' ? 'bg-purple-600 text-white' : 'bg-white border whitespace-pre-wrap'}`}>{m.text}</span>
                       </div>
                     ))}
-                    {isLoadingAI && <Loader2 className="w-4 h-4 animate-spin mx-auto" />}
+                    {(isLoadingAI || isSimulatingBeams) && <Loader2 className="w-4 h-4 animate-spin mx-auto" />}
                     <div ref={messagesEndRef} />
                   </div>
                   <div className="flex gap-1">
