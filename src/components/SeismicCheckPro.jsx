@@ -58,8 +58,12 @@ const SeismicCheckPro = ({ initialData }) => {
     return `id-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
   };
 
+  // Scroll to bottom of chat
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    // Only scroll if there are messages or loading state, preventing scroll on initial load
+    if (chatMessages.length > 0 || isLoadingAI) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
   }, [chatMessages, isLoadingAI]);
 
   // --- Logic Extraction: Get Valid Wall Segments from JSON ---
