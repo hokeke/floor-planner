@@ -149,7 +149,8 @@ const calculateAnalysis = (elements, buildingType, jsonFloorPlan, seismicGrade =
     ex: ex, ey: ey, rex, rey, Rex, Rey, maxRe,
     balanceScore, quantityScore,
     targetStiffness, totalStiffness,
-    quadrants
+    quadrants,
+    gradeFactor
   };
 };
 
@@ -164,7 +165,7 @@ const SeismicCheckPro = ({ initialData }) => {
   const [tool, setTool] = useState('wall');
   const [wallMultiplier, setWallMultiplier] = useState(2.5);
   const [buildingType, setBuildingType] = useState('1');
-  const [seismicGrade, setSeismicGrade] = useState(1); // Added State
+  const [seismicGrade, setSeismicGrade] = useState(1);
   const [isDrawing, setIsDrawing] = useState(false);
   const [startPos, setStartPos] = useState({ x: 0, y: 0 });
   const [showAnalysis, setShowAnalysis] = useState(true);
@@ -489,10 +490,11 @@ const SeismicCheckPro = ({ initialData }) => {
       const systemPrompt = `
           あなたは構造設計の専門家AIです。
           与えられた「壁配置候補（Candidate Walls）」の中から、耐震性能が最適になる組み合わせを選定してください。
+          現在の壁配置は無視し、ゼロベースで考えてください。
           
           【目標】
-          1. 壁量充足率 100%以上
-          2. 偏心率バランススコア 98点以上 (偏心率を限りなく0.15以下、できれば0に近づける)
+          1. 壁量充足率 100%以上 (耐震等級${seismicGrade}相当)
+          2. 偏心率バランススコア 98点以上 (重心と剛心をほぼ一致させる)
           
           【ルール】
           - 使用する壁の倍率は ${wallMultiplier} です。
@@ -741,29 +743,18 @@ const SeismicCheckPro = ({ initialData }) => {
             const onWall = isPointOnWall(pt.x, pt.y);
 
             if (onWall) {
-              // On Wall -> Add Column (Priority)
-              // Filter intermediate points to avoid too many columns?
-              // But "half grid allowed" implies we should keep them if on grid.
+              // On Wall -> Add Column
               newCols.push(pt);
             } else {
-              // Open space
-              // Only add column if it is a floating beam endpoint
-              // Is this point a beam endpoint?
+              // Open space - Only add if beam end and floating
               const isBeamEnd = result.beams.some(b =>
                 (Math.abs(b.x1 - pt.x) < 10 && Math.abs(b.y1 - pt.y) < 10) ||
                 (Math.abs(b.x2 - pt.x) < 10 && Math.abs(b.y2 - pt.y) < 10)
               );
 
               if (isBeamEnd) {
-                // Is it supported by another beam (T-junction / intersection)?
-                // We check if point is ON any other beam (including endpoints)
                 const supportedByBeam = isPointOnAnyBeam(pt.x, pt.y);
-
-                if (supportedByBeam) {
-                  // Supported -> No Column
-                  return;
-                } else {
-                  // Floating -> Add Column
+                if (!supportedByBeam) {
                   newCols.push(pt);
                 }
               }
@@ -810,6 +801,7 @@ const SeismicCheckPro = ({ initialData }) => {
 
     setIsCalculatingStress(true);
     setAiError(null);
+    setWeakPoints([]); // Reset previous weak points
 
     const walls = elements.filter(e => e.type === 'wall').map(e => ({ x1: Math.round(e.x1), y1: Math.round(e.y1), x2: Math.round(e.x2), y2: Math.round(e.y2), multiplier: e.multiplier }));
     const columns = elements.filter(e => e.type === 'column').map(e => ({ x: Math.round(e.x), y: Math.round(e.y) }));
@@ -834,8 +826,8 @@ const SeismicCheckPro = ({ initialData }) => {
           { "item": "柱の座屈", "status": "OK", "ratio": 0.4, "comment": "..." },
           // ... その他必要な項目
         ],
-        "weakPoints": [ // 具体的に危険な箇所（座標や部材IDで指定）
-          { "location": "X:3640, Y:1820付近", "issue": "梁スパンが飛びすぎているためたわみが懸念されます。" }
+        "weakPoints": [ 
+          { "x": 3640, "y": 1820, "issue": "梁スパンが飛びすぎているためたわみが懸念されます。" }
         ]
       }
     `;
@@ -861,17 +853,15 @@ const SeismicCheckPro = ({ initialData }) => {
       if (text) {
         const result = JSON.parse(text);
 
-        // Construct result message
+        if (result.weakPoints) {
+          setWeakPoints(result.weakPoints);
+        }
+
         let msg = `【許容応力度計算結果】判定: ${result.overallResult}\n\n${result.summary}\n\n`;
         result.checkPoints?.forEach(cp => {
           const icon = cp.status === 'OK' ? '✅' : cp.status === 'NG' ? '❌' : '⚠️';
           msg += `${icon} ${cp.item} (検定比: ${cp.ratio}): ${cp.comment}\n`;
         });
-        if (result.weakPoints?.length > 0) {
-          msg += `\n📍 重点指摘事項:\n`;
-          result.weakPoints.forEach(wp => msg += `- ${wp.location}: ${wp.issue}\n`);
-        }
-
         setChatMessages(prev => [...prev, { role: 'model', text: msg }]);
       }
     } catch (e) {
