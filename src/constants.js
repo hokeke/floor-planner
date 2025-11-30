@@ -12,7 +12,7 @@ export const ROOM_TYPES = [
 ];
 
 export const OBJECT_TYPES = [
-  { id: 'door', label: 'ドア (Door)', width: 800, height: 600, type: 'opening' },
+  { id: 'door', label: 'ドア (Door)', width: 600, height: 600, type: 'opening' },
   { id: 'window', label: '引き違い窓 (Sliding Window)', width: 1600, height: 100, type: 'opening' },
   { id: 'fix_window', label: 'Fix窓 (Fix Window)', width: 1600, height: 100, type: 'opening' },
   { id: 'table', label: 'テーブル (Table)', width: 1500, height: 800, type: 'table' },

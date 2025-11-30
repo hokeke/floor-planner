@@ -2,15 +2,15 @@ import React from 'react';
 import { mmToPx } from '../../utils/units';
 
 const Door = ({ width, height, scale }) => {
-  // Pillars (Gray parts)
-  const pillarWidth = mmToPx(100); // 100mm pillars
-  const openingWidth = width - (pillarWidth * 2);
+  // Pillars removed as per user request
+  const pillarWidth = 0;
+  const openingWidth = width;
 
   // Ensure opening isn't negative
   const validOpeningWidth = Math.max(0, openingWidth);
 
-  // Hinge at left inner edge
-  const hingeX = -width / 2 + pillarWidth;
+  // Hinge at left inner edge (now left edge)
+  const hingeX = -width / 2;
 
   // Wall Thickness (100mm)
   const wallThickness = mmToPx(100);
@@ -23,24 +23,6 @@ const Door = ({ width, height, scale }) => {
 
   return (
     <g>
-      {/* Pillars (Gray) */}
-      <rect
-        x={-width / 2}
-        y={-wallThickness / 2}
-        width={pillarWidth}
-        height={wallThickness}
-        fill="#999"
-        stroke="none"
-      />
-      <rect
-        x={width / 2 - pillarWidth}
-        y={-wallThickness / 2}
-        width={pillarWidth}
-        height={wallThickness}
-        fill="#999"
-        stroke="none"
-      />
-
       {/* Opening (White) */}
       <rect
         x={hingeX}
