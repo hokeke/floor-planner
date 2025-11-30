@@ -4,7 +4,7 @@ import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { Upload, Activity, Shield, AlertTriangle, CheckCircle, Info, Move, MousePointer2, Trash2, RotateCcw, X, Home, ArrowUpCircle, Sparkles, Loader2, FileJson, Key, Settings, Send, Layers, Wand2, Network, Calculator } from 'lucide-react';
 
 // --- Logic Extraction: Pure Calculation Function ---
-const calculateAnalysis = (elements, buildingType, jsonFloorPlan) => {
+const calculateAnalysis = (elements, buildingType, jsonFloorPlan, seismicGrade = 1) => {
   if (!elements || elements.length === 0) return null;
 
   // 1. Helper: Polygon Metrics
@@ -120,7 +120,12 @@ const calculateAnalysis = (elements, buildingType, jsonFloorPlan) => {
   }
 
   // 6. Wall Quantity
-  const targetStiffness = totalArea * (buildingType === '2' ? 0.0018 : 0.0011);
+  const baseCoeff = buildingType === '2' ? 0.0018 : 0.0011;
+  let gradeFactor = 1.0;
+  if (seismicGrade === 2) gradeFactor = 1.25;
+  if (seismicGrade === 3) gradeFactor = 1.50;
+
+  const targetStiffness = totalArea * baseCoeff * gradeFactor;
   const totalStiffness = Kx + Ky;
   const quantityScore = Math.min(100, (totalStiffness / targetStiffness) * 100);
 
@@ -141,9 +146,9 @@ const calculateAnalysis = (elements, buildingType, jsonFloorPlan) => {
     centerX, centerY, rigidityX, rigidityY,
     normCenterX: centerX, normCenterY: centerY,
     normRigidityX: rigidityX, normRigidityY: rigidityY,
-    ex, ey, rex, rey, Rex, Rey, maxRe,
+    ex: ex, ey: ey, rex, rey, Rex, Rey, maxRe,
     balanceScore, quantityScore,
-    targetStiffness, totalStiffness, // Added for display
+    targetStiffness, totalStiffness,
     quadrants
   };
 };
@@ -154,16 +159,17 @@ const SeismicCheckPro = ({ initialData }) => {
   const [jsonFloorPlan, setJsonFloorPlan] = useState(null);
   const [elements, setElements] = useState([]);
   const [beams, setBeams] = useState([]); // 梁のデータ
-  const [weakPoints, setWeakPoints] = useState([]); // 許容応力度計算の弱点データ {x, y, issue}
-  const [hoveredWeakPoint, setHoveredWeakPoint] = useState(null); // Tooltip control
+  const [weakPoints, setWeakPoints] = useState([]); // 許容応力度計算の弱点データ
+  const [hoveredWeakPoint, setHoveredWeakPoint] = useState(null);
   const [tool, setTool] = useState('wall');
   const [wallMultiplier, setWallMultiplier] = useState(2.5);
   const [buildingType, setBuildingType] = useState('1');
+  const [seismicGrade, setSeismicGrade] = useState(1); // Added State
   const [isDrawing, setIsDrawing] = useState(false);
   const [startPos, setStartPos] = useState({ x: 0, y: 0 });
   const [showAnalysis, setShowAnalysis] = useState(true);
   const [showGrid, setShowGrid] = useState(true);
-  const [showBeams, setShowBeams] = useState(true); // 梁の表示切替
+  const [showBeams, setShowBeams] = useState(true);
 
   const [viewBox, setViewBox] = useState("0 0 100 100");
 
@@ -176,8 +182,8 @@ const SeismicCheckPro = ({ initialData }) => {
   const [inputMessage, setInputMessage] = useState("");
   const [isLoadingAI, setIsLoadingAI] = useState(false);
   const [isOptimizing, setIsOptimizing] = useState(false);
-  const [isSimulatingBeams, setIsSimulatingBeams] = useState(false); // 梁シミュレーション中
-  const [isCalculatingStress, setIsCalculatingStress] = useState(false); // 許容応力度計算中
+  const [isSimulatingBeams, setIsSimulatingBeams] = useState(false);
+  const [isCalculatingStress, setIsCalculatingStress] = useState(false);
   const [aiError, setAiError] = useState(null);
 
   const messagesEndRef = useRef(null);
@@ -403,8 +409,8 @@ const SeismicCheckPro = ({ initialData }) => {
   };
 
   const analysisResult = useMemo(() => {
-    return calculateAnalysis(elements, buildingType, jsonFloorPlan);
-  }, [elements, buildingType, jsonFloorPlan]);
+    return calculateAnalysis(elements, buildingType, jsonFloorPlan, seismicGrade);
+  }, [elements, buildingType, jsonFloorPlan, seismicGrade]);
 
   const generateAIAdvice = async (overrideMessage = null) => {
     if (!analysisResult || !apiKey) { setAiError("APIキーを入力してください"); return; }
@@ -529,7 +535,7 @@ const SeismicCheckPro = ({ initialData }) => {
               };
             }).filter(Boolean);
             const testElements = [...generatedElements, ...cols];
-            const metrics = calculateAnalysis(testElements, buildingType, jsonFloorPlan);
+            const metrics = calculateAnalysis(testElements, buildingType, jsonFloorPlan, seismicGrade);
             let currentScore = metrics.balanceScore;
             if (metrics.quantityScore < 100) currentScore = currentScore * (metrics.quantityScore / 100);
             if (currentScore > bestScore) {
@@ -893,7 +899,7 @@ const SeismicCheckPro = ({ initialData }) => {
         {!jsonFloorPlan ? (
           <button onClick={() => fileInputRef.current.click()} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded text-sm flex gap-2"><Upload className="w-4 h-4" />ファイルを開く</button>
         ) : (
-          <button onClick={() => { setJsonFloorPlan(null); setElements([]); setBeams([]); }} className="px-3 py-1 bg-slate-700 rounded text-sm flex gap-2"><RotateCcw className="w-3 h-3" />リセット</button>
+          <button onClick={() => { setJsonFloorPlan(null); setElements([]); setBeams([]); setWeakPoints([]); }} className="px-3 py-1 bg-slate-700 rounded text-sm flex gap-2"><RotateCcw className="w-3 h-3" />リセット</button>
         )}
       </header>
 
@@ -975,7 +981,7 @@ const SeismicCheckPro = ({ initialData }) => {
                   }}
                 >
                   <p className="font-bold text-amber-400 mb-1">指摘事項</p>
-                  {hoveredWeakPoint.issue}
+                  {String(hoveredWeakPoint.issue)}
                 </div>
               )}
             </div>
@@ -1011,6 +1017,22 @@ const SeismicCheckPro = ({ initialData }) => {
               <label className="flex items-center cursor-pointer"><input type="checkbox" checked={showGrid} onChange={e => setShowGrid(e.target.checked)} className="mr-1" /> グリッド</label>
               <label className="flex items-center cursor-pointer"><input type="checkbox" checked={showBeams} onChange={e => setShowBeams(e.target.checked)} className="mr-1" /> 梁(シミュ)</label>
             </div>
+
+            {/* Seismic Grade Selector */}
+            <div className="mb-4">
+              <label className="text-xs font-bold text-gray-500 mb-1 block">目標耐震等級</label>
+              <div className="flex bg-white rounded-lg border border-gray-200 p-1">
+                {[1, 2, 3].map(g => (
+                  <button
+                    key={g}
+                    onClick={() => setSeismicGrade(g)}
+                    className={`flex-1 py-1 px-2 rounded text-xs font-medium transition-colors ${seismicGrade === g ? 'bg-orange-100 text-orange-800' : 'text-gray-500 hover:bg-gray-50'}`}
+                  >
+                    等級{g}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
           {/* Analysis Report */}
@@ -1020,13 +1042,13 @@ const SeismicCheckPro = ({ initialData }) => {
               <div className="space-y-4">
                 <div className="bg-slate-50 p-3 rounded-lg text-center border border-slate-100">
                   <div className="text-sm text-gray-500">判定結果</div>
-                  <div className={`text-xl font-bold ${analysisResult.balanceScore >= 100 ? 'text-emerald-600' : analysisResult.balanceScore >= 60 ? 'text-amber-600' : 'text-red-500'}`}>
-                    {analysisResult.balanceScore >= 100 ? '優良 (Rank S)' : analysisResult.balanceScore >= 60 ? '適合 (Rank A)' : '要注意 (Rank B)'}
+                  <div className={`text-xl font-bold ${analysisResult.balanceScore >= 100 && analysisResult.quantityScore >= 100 ? 'text-emerald-600' : analysisResult.balanceScore >= 60 && analysisResult.quantityScore >= 100 ? 'text-amber-600' : 'text-red-500'}`}>
+                    {analysisResult.balanceScore >= 100 && analysisResult.quantityScore >= 100 ? '優良 (Rank S)' : analysisResult.balanceScore >= 60 && analysisResult.quantityScore >= 100 ? '適合 (Rank A)' : '要注意 (Rank B)'}
                   </div>
                   <div className="grid grid-cols-2 gap-2 mt-2 text-left text-xs">
                     <div className="bg-white p-2 rounded border">
                       <span className="block text-gray-400">壁量充足率</span>
-                      <span className="font-bold text-base">{analysisResult.quantityScore.toFixed(0)}%</span>
+                      <span className={`font-bold text-base ${analysisResult.quantityScore >= 100 ? 'text-emerald-600' : 'text-red-500'}`}>{analysisResult.quantityScore.toFixed(0)}%</span>
                     </div>
                     <div className="bg-white p-2 rounded border">
                       <span className="block text-gray-400">最大偏心率</span>
@@ -1035,10 +1057,9 @@ const SeismicCheckPro = ({ initialData }) => {
                       </span>
                     </div>
                   </div>
-                  {/* Add details */}
                   <div className="mt-2 text-[10px] text-gray-500 bg-white p-2 rounded border text-left space-y-1">
-                    <p>必要壁量: {analysisResult.targetStiffness.toFixed(0)} (床面積ベース)</p>
-                    <p>存在壁量: {analysisResult.totalStiffness.toFixed(0)} (長さ×倍率の総和)</p>
+                    <p>必要壁量: {analysisResult.targetStiffness.toFixed(0)} (等級{seismicGrade} × 床面積)</p>
+                    <p>存在壁量: {analysisResult.totalStiffness.toFixed(0)} (壁倍率考慮)</p>
                   </div>
                   <div className="text-[10px] text-gray-400 mt-1 text-left">※ 偏心率 0.15以下: 優良, 0.30以下: 適合</div>
                 </div>
