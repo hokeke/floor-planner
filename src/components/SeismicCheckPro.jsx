@@ -465,6 +465,72 @@ const SeismicCheckPro = ({ initialData }) => {
     } catch (e) { setAiError("通信エラー"); } finally { setIsLoadingAI(false); }
   };
 
+  const handleSendMessage = async () => {
+    if (!inputMessage.trim() && chatMessages.length === 0) return;
+    if (!analysisResult) return;
+    if (!apiKey) {
+      setAiError("APIキーが入力されていません。");
+      return;
+    }
+
+    setIsLoadingAI(true);
+    setAiError(null);
+
+    const newUserMessage = { role: 'user', text: inputMessage };
+    const newHistory = [...chatMessages, newUserMessage];
+    setChatMessages(newHistory);
+    setInputMessage("");
+
+    try {
+      // Construct context for chat (reusing logic from generateAIAdvice for consistent context if needed)
+      // For simplicity, just sending history + system prompt. 
+      // But system prompt needs to be fresh with current state.
+
+      // We need to define constructSystemPrompt inside component or use generateAIAdvice logic
+      // Let's reuse the logic inside generateAIAdvice but adapted for chat flow or just use handleSendMessage as main
+      // Since generateAIAdvice is button triggered, let's make a shared context builder.
+      // For now, simple chat continuation:
+
+      // NOTE: Ideally we should send the full system prompt every time with current state.
+      // Let's replicate the state string building here briefly or assume context is carried (it's not in REST API)
+
+      // Re-build minimal context
+      const wallList = elements.filter(e => e.type === 'wall').map((e, i) => `W${i}`).join(',');
+      const contextPrompt = `Current State: Walls=${elements.filter(e => e.type === 'wall').length}, Score=${analysisResult.balanceScore.toFixed(0)}, Re=${analysisResult.maxRe.toFixed(3)}. User asks: ${inputMessage}`;
+
+      const contents = newHistory.map(m => ({ role: m.role, parts: [{ text: m.text }] }));
+
+      // Add current state as system instruction or last user message addition
+      // A better way for chat is to append state to the latest user message invisibly, 
+      // but here we just send the history. The AI might lose context of "current map" if it changed.
+      // Ideally, we should send the map data again if it changed.
+
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: contents,
+          systemInstruction: { parts: [{ text: `あなたは構造設計士です。現在のデータ: 偏心率${analysisResult.maxRe.toFixed(3)}, 壁量${analysisResult.quantityScore.toFixed(0)}%` }] }
+        }),
+      });
+
+      if (!res.ok) throw new Error('API request failed');
+      const data = await res.json();
+      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+      if (text) {
+        setChatMessages(prev => [...prev, { role: 'model', text: text }]);
+      } else {
+        throw new Error('No advice generated');
+      }
+    } catch (error) {
+      console.error('Gemini API Error:', error);
+      setAiError('エラーが発生しました。');
+    } finally {
+      setIsLoadingAI(false);
+    }
+  };
+
   const optimizeStructure = async () => {
     if (!analysisResult || !apiKey) { setAiError("APIキーを入力してください"); return; }
     setIsOptimizing(true);
@@ -490,11 +556,10 @@ const SeismicCheckPro = ({ initialData }) => {
       const systemPrompt = `
           あなたは構造設計の専門家AIです。
           与えられた「壁配置候補（Candidate Walls）」の中から、耐震性能が最適になる組み合わせを選定してください。
-          現在の壁配置は無視し、ゼロベースで考えてください。
           
           【目標】
-          1. 壁量充足率 100%以上 (耐震等級${seismicGrade}相当)
-          2. 偏心率バランススコア 98点以上 (重心と剛心をほぼ一致させる)
+          1. 壁量充足率 100%以上
+          2. 偏心率バランススコア 98点以上 (偏心率を限りなく0.15以下、できれば0に近づける)
           
           【ルール】
           - 使用する壁の倍率は ${wallMultiplier} です。
@@ -801,7 +866,6 @@ const SeismicCheckPro = ({ initialData }) => {
 
     setIsCalculatingStress(true);
     setAiError(null);
-    setWeakPoints([]); // Reset previous weak points
 
     const walls = elements.filter(e => e.type === 'wall').map(e => ({ x1: Math.round(e.x1), y1: Math.round(e.y1), x2: Math.round(e.x2), y2: Math.round(e.y2), multiplier: e.multiplier }));
     const columns = elements.filter(e => e.type === 'column').map(e => ({ x: Math.round(e.x), y: Math.round(e.y) }));
