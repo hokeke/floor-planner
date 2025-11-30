@@ -146,7 +146,7 @@ const calculateAnalysis = (elements, buildingType, jsonFloorPlan, seismicGrade =
     centerX, centerY, rigidityX, rigidityY,
     normCenterX: centerX, normCenterY: centerY,
     normRigidityX: rigidityX, normRigidityY: rigidityY,
-    ex: ex, ey: ey, rex, rey, Rex, Rey, maxRe,
+    ex, ey, rex, rey, Rex, Rey, maxRe,
     balanceScore, quantityScore,
     targetStiffness, totalStiffness,
     quadrants,
@@ -170,7 +170,7 @@ const SeismicCheckPro = ({ initialData }) => {
   const [startPos, setStartPos] = useState({ x: 0, y: 0 });
   const [showAnalysis, setShowAnalysis] = useState(true);
   const [showGrid, setShowGrid] = useState(true);
-  const [showBeams, setShowBeams] = useState(true);
+  const [showBeams, setShowBeams] = useState(true); // 梁の表示切替
 
   const [viewBox, setViewBox] = useState("0 0 100 100");
 
@@ -183,8 +183,8 @@ const SeismicCheckPro = ({ initialData }) => {
   const [inputMessage, setInputMessage] = useState("");
   const [isLoadingAI, setIsLoadingAI] = useState(false);
   const [isOptimizing, setIsOptimizing] = useState(false);
-  const [isSimulatingBeams, setIsSimulatingBeams] = useState(false);
-  const [isCalculatingStress, setIsCalculatingStress] = useState(false);
+  const [isSimulatingBeams, setIsSimulatingBeams] = useState(false); // 梁シミュレーション中
+  const [isCalculatingStress, setIsCalculatingStress] = useState(false); // 許容応力度計算中
   const [aiError, setAiError] = useState(null);
 
   const messagesEndRef = useRef(null);
@@ -482,34 +482,11 @@ const SeismicCheckPro = ({ initialData }) => {
     setInputMessage("");
 
     try {
-      // Construct context for chat (reusing logic from generateAIAdvice for consistent context if needed)
-      // For simplicity, just sending history + system prompt. 
-      // But system prompt needs to be fresh with current state.
-
-      // We need to define constructSystemPrompt inside component or use generateAIAdvice logic
-      // Let's reuse the logic inside generateAIAdvice but adapted for chat flow or just use handleSendMessage as main
-      // Since generateAIAdvice is button triggered, let's make a shared context builder.
-      // For now, simple chat continuation:
-
-      // NOTE: Ideally we should send the full system prompt every time with current state.
-      // Let's replicate the state string building here briefly or assume context is carried (it's not in REST API)
-
-      // Re-build minimal context
-      const wallList = elements.filter(e => e.type === 'wall').map((e, i) => `W${i}`).join(',');
-      const contextPrompt = `Current State: Walls=${elements.filter(e => e.type === 'wall').length}, Score=${analysisResult.balanceScore.toFixed(0)}, Re=${analysisResult.maxRe.toFixed(3)}. User asks: ${inputMessage}`;
-
-      const contents = newHistory.map(m => ({ role: m.role, parts: [{ text: m.text }] }));
-
-      // Add current state as system instruction or last user message addition
-      // A better way for chat is to append state to the latest user message invisibly, 
-      // but here we just send the history. The AI might lose context of "current map" if it changed.
-      // Ideally, we should send the map data again if it changed.
-
       const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          contents: contents,
+          contents: newHistory.map(m => ({ role: m.role, parts: [{ text: m.text }] })),
           systemInstruction: { parts: [{ text: `あなたは構造設計士です。現在のデータ: 偏心率${analysisResult.maxRe.toFixed(3)}, 壁量${analysisResult.quantityScore.toFixed(0)}%` }] }
         }),
       });
@@ -890,7 +867,7 @@ const SeismicCheckPro = ({ initialData }) => {
           { "item": "柱の座屈", "status": "OK", "ratio": 0.4, "comment": "..." },
           // ... その他必要な項目
         ],
-        "weakPoints": [ 
+        "weakPoints": [ // 具体的に危険な箇所（座標や部材IDで指定）
           { "x": 3640, "y": 1820, "issue": "梁スパンが飛びすぎているためたわみが懸念されます。" }
         ]
       }
