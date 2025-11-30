@@ -153,6 +153,8 @@ const SeismicCheckPro = ({ initialData }) => {
   const [jsonFloorPlan, setJsonFloorPlan] = useState(null);
   const [elements, setElements] = useState([]);
   const [beams, setBeams] = useState([]); // 梁のデータ
+  const [weakPoints, setWeakPoints] = useState([]); // 許容応力度計算の弱点データ {x, y, issue}
+  const [hoveredWeakPoint, setHoveredWeakPoint] = useState(null); // Tooltip control
   const [tool, setTool] = useState('wall');
   const [wallMultiplier, setWallMultiplier] = useState(2.5);
   const [buildingType, setBuildingType] = useState('1');
@@ -315,6 +317,7 @@ const SeismicCheckPro = ({ initialData }) => {
     setJsonFloorPlan(data);
     setChatMessages([]);
     setBeams([]); // Reset beams
+    setWeakPoints([]); // Reset weak points
   };
 
   // Handlers
@@ -585,7 +588,9 @@ const SeismicCheckPro = ({ initialData }) => {
       
       【設計ルール】
       1. 梁は、柱と柱、柱と壁、壁と壁を直線で結ぶように配置してください。
-      2. **【重要】梁のスパン（長さ）は、極力「2間（約3640mm）」以内に収めるようにしてください。**
+      2. **【重要】梁のスパン（長さ）は、原則として「2間（約3640mm）」以内に収めることを目指してください。**
+         - 基本的には3640mmを超える場合、中間に柱を追加してスパンを短くすることを優先してください。
+         - **ただし、部屋の形状や用途により柱を追加することが著しく不適切（部屋の中央に柱が来るなど）な場合に限り、3640mmを超えるスパンを許容します。**
       3. 荷重を支える主要な「大梁（Main Beam）」と、それを補完する「小梁（Sub Beam）」を区別してください。
       4. 座標系は画面左上(0,0)、Y軸下向きプラスです。梁はグリッド（910mmモジュール）に乗るのが望ましいです。
       5. **【最重要】全ての梁の始点と終点は、必ず何らかの支持点（柱、壁、または他の梁）の上に載るようにしてください。**
@@ -730,18 +735,29 @@ const SeismicCheckPro = ({ initialData }) => {
             const onWall = isPointOnWall(pt.x, pt.y);
 
             if (onWall) {
-              // On Wall -> Add Column
+              // On Wall -> Add Column (Priority)
+              // Filter intermediate points to avoid too many columns?
+              // But "half grid allowed" implies we should keep them if on grid.
               newCols.push(pt);
             } else {
-              // Open space - Only add if beam end and floating
+              // Open space
+              // Only add column if it is a floating beam endpoint
+              // Is this point a beam endpoint?
               const isBeamEnd = result.beams.some(b =>
                 (Math.abs(b.x1 - pt.x) < 10 && Math.abs(b.y1 - pt.y) < 10) ||
                 (Math.abs(b.x2 - pt.x) < 10 && Math.abs(b.y2 - pt.y) < 10)
               );
 
               if (isBeamEnd) {
+                // Is it supported by another beam (T-junction / intersection)?
+                // We check if point is ON any other beam (including endpoints)
                 const supportedByBeam = isPointOnAnyBeam(pt.x, pt.y);
-                if (!supportedByBeam) {
+
+                if (supportedByBeam) {
+                  // Supported -> No Column
+                  return;
+                } else {
+                  // Floating -> Add Column
                   newCols.push(pt);
                 }
               }
@@ -788,6 +804,7 @@ const SeismicCheckPro = ({ initialData }) => {
 
     setIsCalculatingStress(true);
     setAiError(null);
+    setWeakPoints([]); // Reset previous weak points
 
     const walls = elements.filter(e => e.type === 'wall').map(e => ({ x1: Math.round(e.x1), y1: Math.round(e.y1), x2: Math.round(e.x2), y2: Math.round(e.y2), multiplier: e.multiplier }));
     const columns = elements.filter(e => e.type === 'column').map(e => ({ x: Math.round(e.x), y: Math.round(e.y) }));
@@ -808,12 +825,10 @@ const SeismicCheckPro = ({ initialData }) => {
         "summary": "...", // 全体的な評価コメント
         "checkPoints": [
           { "item": "梁の曲げ", "status": "OK", "ratio": 0.6, "comment": "..." },
-          { "item": "梁のたわみ", "status": "Warning", "ratio": 0.95, "comment": "..." },
-          { "item": "柱の座屈", "status": "OK", "ratio": 0.4, "comment": "..." },
-          // ... その他必要な項目
+          // ...
         ],
-        "weakPoints": [ // 具体的に危険な箇所（座標や部材IDで指定）
-          { "location": "X:3640, Y:1820付近", "issue": "梁スパンが飛びすぎているためたわみが懸念されます。" }
+        "weakPoints": [ 
+          { "x": 3640, "y": 1820, "issue": "梁スパンが飛びすぎているためたわみが懸念されます。" }
         ]
       }
     `;
@@ -839,17 +854,15 @@ const SeismicCheckPro = ({ initialData }) => {
       if (text) {
         const result = JSON.parse(text);
 
-        // Construct result message
+        if (result.weakPoints) {
+          setWeakPoints(result.weakPoints);
+        }
+
         let msg = `【許容応力度計算結果】判定: ${result.overallResult}\n\n${result.summary}\n\n`;
         result.checkPoints?.forEach(cp => {
           const icon = cp.status === 'OK' ? '✅' : cp.status === 'NG' ? '❌' : '⚠️';
           msg += `${icon} ${cp.item} (検定比: ${cp.ratio}): ${cp.comment}\n`;
         });
-        if (result.weakPoints?.length > 0) {
-          msg += `\n📍 重点指摘事項:\n`;
-          result.weakPoints.forEach(wp => msg += `- ${wp.location}: ${wp.issue}\n`);
-        }
-
         setChatMessages(prev => [...prev, { role: 'model', text: msg }]);
       }
     } catch (e) {
@@ -877,7 +890,7 @@ const SeismicCheckPro = ({ initialData }) => {
         {!jsonFloorPlan ? (
           <button onClick={() => fileInputRef.current.click()} className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded text-sm flex gap-2"><Upload className="w-4 h-4" />ファイルを開く</button>
         ) : (
-          <button onClick={() => { setJsonFloorPlan(null); setElements([]); setBeams([]); }} className="px-3 py-1 bg-slate-700 rounded text-sm flex gap-2"><RotateCcw className="w-3 h-3" />リセット</button>
+          <button onClick={() => { setJsonFloorPlan(null); setElements([]); setBeams([]); setWeakPoints([]); }} className="px-3 py-1 bg-slate-700 rounded text-sm flex gap-2"><RotateCcw className="w-3 h-3" />リセット</button>
         )}
       </header>
 
@@ -925,6 +938,20 @@ const SeismicCheckPro = ({ initialData }) => {
                   return <rect key={el.id} x={el.x - 100} y={el.y - 100} width={200} height={200} fill="#3b82f6" />;
                 })}
 
+                {/* Weak Points Overlay */}
+                {weakPoints.map((wp, i) => (
+                  <g
+                    key={`wp-${i}`}
+                    transform={`translate(${wp.x}, ${wp.y})`}
+                    onMouseEnter={() => setHoveredWeakPoint(wp)}
+                    onMouseLeave={() => setHoveredWeakPoint(null)}
+                    style={{ cursor: 'help' }}
+                  >
+                    <circle r="150" fill="rgba(255, 0, 0, 0.3)" stroke="red" strokeWidth="20" />
+                    <text y="50" fontSize="200" textAnchor="middle">⚠️</text>
+                  </g>
+                ))}
+
                 {analysisResult && showAnalysis && (
                   <>
                     <circle cx={analysisResult.centerX} cy={analysisResult.centerY} r={300} fill="orange" stroke="white" strokeWidth="50" />
@@ -933,6 +960,21 @@ const SeismicCheckPro = ({ initialData }) => {
                   </>
                 )}
               </svg>
+
+              {/* Tooltip Overlay */}
+              {hoveredWeakPoint && (
+                <div
+                  className="absolute bg-black/80 text-white p-2 rounded text-xs pointer-events-none z-50 max-w-xs"
+                  style={{
+                    left: '50%', // Simple centering for now, ideally dynamic
+                    top: '10%',
+                    transform: 'translateX(-50%)'
+                  }}
+                >
+                  <p className="font-bold text-amber-400 mb-1">指摘事項</p>
+                  {hoveredWeakPoint.issue}
+                </div>
+              )}
             </div>
           )}
         </div>
