@@ -566,23 +566,38 @@ const SeismicCheckPro = ({ initialData }) => {
       return r.points.map(p => ({ x: Math.round(p.x * COORD_SCALE), y: Math.round(p.y * COORD_SCALE) }));
     });
 
+    // OPENING DATA PREPARATION FOR FILTERING
+    const openings = jsonFloorPlan?.objects?.filter(obj =>
+      obj.type.includes('window') ||
+      obj.type.includes('door') ||
+      obj.type === 'entrance' ||
+      obj.type === 'opening'
+    ).map(obj => {
+      const isVertical = (Math.abs((obj.rotation || 0) - 90) < 1 || Math.abs((obj.rotation || 0) - 270) < 1);
+      const width = isVertical ? (obj.height > 100 ? obj.height : 200) : obj.width;
+      const height = isVertical ? obj.width : (obj.height > 100 ? obj.height : 200);
+      return { x: obj.x, y: obj.y, width, height };
+    }) || [];
+
     const systemPrompt = `
       あなたは木造住宅の構造設計の専門家です。
       与えられた壁・柱・部屋の配置データから、最適な「梁伏図（はりぶせず）」を作成してください。
       
       【設計ルール】
       1. 梁は、柱と柱、柱と壁、壁と壁を直線で結ぶように配置してください。
-      2. **【重要】梁のスパン（長さ）は、極力「2間（約3640mm）」以内に収めるようにしてください。** 長大スパンを避けるため、必要に応じて短い梁を連続させたり、直交する梁で支えるなどの工夫をしてください。
+      2. **【重要】梁のスパン（長さ）は、極力「2間（約3640mm）」以内に収めるようにしてください。**
       3. 荷重を支える主要な「大梁（Main Beam）」と、それを補完する「小梁（Sub Beam）」を区別してください。
       4. 座標系は画面左上(0,0)、Y軸下向きプラスです。梁はグリッド（910mmモジュール）に乗るのが望ましいです。
-      5. **【最重要】全ての梁の始点と終点は、必ず何らかの支持点（柱、壁、または他の梁）の上に載るようにしてください。空中に浮いた端点を作らないでください。**
-      6. **【最重要】独立した梁（どこにも接続していない梁）は禁止です。梁全体で一つの強固なグリッド状の構造を形成してください。**
+      5. **【最重要】全ての梁の始点と終点は、必ず何らかの支持点（柱、壁、または他の梁）の上に載るようにしてください。**
+      6. **【最重要】独立した梁は禁止です。梁全体で一つの強固なグリッド状の構造を形成してください。**
+      7. **【柱の追加に関する禁止事項】**
+         - 追加する柱はレスポンスに含めないでください（beamsリストのみ返すこと）。柱の追加判断はクライアント側のロジックで行います。
       
       【出力フォーマット】
       JSON形式のみ:
       {
         "beams": [
-          { "x1": number, "y1": number, "x2": number, "y2": number, "type": "main" }, // type: "main" or "sub"
+          { "x1": number, "y1": number, "x2": number, "y2": number, "type": "main" }, 
           ...
         ]
       }
@@ -610,7 +625,152 @@ const SeismicCheckPro = ({ initialData }) => {
         const result = JSON.parse(text);
         if (result.beams) {
           setBeams(result.beams);
-          setChatMessages(prev => [...prev, { role: 'model', text: `【梁シミュレーション完了】\n${result.beams.length}本の梁を配置しました。` }]);
+
+          // --- LOGIC-BASED COLUMN ADDITION ---
+          const newCols = [];
+          const existingCols = [...elements.filter(e => e.type === 'column')];
+          // Use MODULE_GRID as base interval
+          const COL_INTERVAL = MODULE_GRID;
+
+          // Function to check if a point is on a wall
+          const isPointOnWall = (px, py) => {
+            return elements.some(el => {
+              if (el.type !== 'wall') return false;
+              const tolerance = 150;
+              const minX = Math.min(el.x1, el.x2) - tolerance;
+              const maxX = Math.max(el.x1, el.x2) + tolerance;
+              const minY = Math.min(el.y1, el.y2) - tolerance;
+              const maxY = Math.max(el.y1, el.y2) + tolerance;
+              if (px < minX || px > maxX || py < minY || py > maxY) return false;
+
+              const A = px - el.x1, B = py - el.y1, C = el.x2 - el.x1, D = el.y2 - el.y1;
+              const dot = A * C + B * D, len_sq = C * C + D * D;
+              let param = -1;
+              if (len_sq !== 0) param = dot / len_sq;
+              let xx, yy;
+              if (param < 0) { xx = el.x1; yy = el.y1; }
+              else if (param > 1) { xx = el.x2; yy = el.y2; }
+              else { xx = el.x1 + param * C; yy = el.y1 + param * D; }
+              const dx = px - xx, dy = py - yy;
+              return Math.sqrt(dx * dx + dy * dy) < tolerance;
+            });
+          };
+
+          // Helper: Check if point is on any beam (excluding specific beam)
+          const isPointOnAnyBeam = (px, py, excludeBeam = null) => {
+            return result.beams.some(b => {
+              if (b === excludeBeam) return false;
+              const tolerance = 100;
+              // Bounding box check
+              if (px < Math.min(b.x1, b.x2) - tolerance || px > Math.max(b.x1, b.x2) + tolerance ||
+                py < Math.min(b.y1, b.y2) - tolerance || py > Math.max(b.y1, b.y2) + tolerance) return false;
+              // Distance check
+              const len2 = Math.pow(b.x2 - b.x1, 2) + Math.pow(b.y2 - b.y1, 2);
+              if (len2 === 0) return false;
+              const t = ((px - b.x1) * (b.x2 - b.x1) + (py - b.y1) * (b.y2 - b.y1)) / len2;
+              const tClamped = Math.max(0, Math.min(1, t));
+              const projX = b.x1 + tClamped * (b.x2 - b.x1);
+              const projY = b.y1 + tClamped * (b.y2 - b.y1);
+              return Math.sqrt(Math.pow(px - projX, 2) + Math.pow(py - projY, 2)) < tolerance;
+            });
+          };
+
+          // Helper: Opening check
+          const isInOpening = (px, py) => {
+            return openings.some(op => {
+              const margin = 100;
+              const minX = op.x - op.width / 2 - margin;
+              const maxX = op.x + op.width / 2 + margin;
+              const minY = op.y - op.height / 2 - margin;
+              const maxY = op.y + op.height / 2 + margin;
+              return (px >= minX && px <= maxX && py >= minY && py <= maxY);
+            });
+          };
+
+          // Candidate Points Generation
+          let candidates = [];
+
+          // A. Wall Endpoints
+          elements.filter(e => e.type === 'wall').forEach(w => {
+            candidates.push({ x: w.x1, y: w.y1 });
+            candidates.push({ x: w.x2, y: w.y2 });
+          });
+
+          // B. Beam Endpoints
+          result.beams.forEach(b => {
+            candidates.push({ x: b.x1, y: b.y1 });
+            candidates.push({ x: b.x2, y: b.y2 });
+
+            // C. Intermediate Points on Beam (Standard Grid)
+            const len = Math.sqrt(Math.pow(b.x2 - b.x1, 2) + Math.pow(b.y2 - b.y1, 2));
+            // Use COL_INTERVAL (910mm) instead of 455mm to avoid excessive columns
+            const steps = Math.floor(len / COL_INTERVAL);
+            if (steps > 0) {
+              const dx = (b.x2 - b.x1) / len * COL_INTERVAL;
+              const dy = (b.y2 - b.y1) / len * COL_INTERVAL;
+              for (let i = 1; i < steps; i++) {
+                candidates.push({ x: b.x1 + dx * i, y: b.y1 + dy * i });
+              }
+            }
+          });
+
+          // Filter candidates
+          // ... existing filtering logic ...
+          candidates = candidates.filter((p, index, self) =>
+            index === self.findIndex((t) => (Math.abs(t.x - p.x) < 10 && Math.abs(t.y - p.y) < 10)) // Unique
+          );
+
+          candidates.forEach(pt => {
+            // 1. Check existing columns (Wide tolerance)
+            if (existingCols.some(c => Math.abs(c.x - pt.x) < 100 && Math.abs(c.y - pt.y) < 100)) return;
+
+            // 2. Check Opening
+            if (isInOpening(pt.x, pt.y)) return;
+
+            const onWall = isPointOnWall(pt.x, pt.y);
+
+            if (onWall) {
+              // On Wall -> Add Column
+              newCols.push(pt);
+            } else {
+              // Open space - Only add if beam end and floating
+              const isBeamEnd = result.beams.some(b =>
+                (Math.abs(b.x1 - pt.x) < 10 && Math.abs(b.y1 - pt.y) < 10) ||
+                (Math.abs(b.x2 - pt.x) < 10 && Math.abs(b.y2 - pt.y) < 10)
+              );
+
+              if (isBeamEnd) {
+                const supportedByBeam = isPointOnAnyBeam(pt.x, pt.y);
+                if (!supportedByBeam) {
+                  newCols.push(pt);
+                }
+              }
+            }
+          });
+
+          // ... existing deduplication and state update ...
+          // Deduplicate and Filter again for final list
+          const uniqueNewCols = [];
+          newCols.forEach(nc => {
+            if (elements.some(el => el.type === 'column' && Math.abs(el.x - nc.x) < 100 && Math.abs(el.y - nc.y) < 100)) return;
+            if (uniqueNewCols.some(c => Math.abs(c.x - nc.x) < 100 && Math.abs(c.y - nc.y) < 100)) return;
+            if (isInOpening(nc.x, nc.y)) return;
+
+            uniqueNewCols.push({
+              id: generateId(),
+              type: 'column',
+              x: Math.round(nc.x),
+              y: Math.round(nc.y),
+              strength: COLUMN_STRENGTH
+            });
+          });
+
+          let message = `【梁シミュレーション完了】\n${result.beams.length}本の梁を配置しました。`;
+          if (uniqueNewCols.length > 0) {
+            setElements(prev => [...prev, ...uniqueNewCols]);
+            message += `\n構造的に必要な柱を${uniqueNewCols.length}本追加しました。`;
+          }
+          setChatMessages(prev => [...prev, { role: 'model', text: message }]);
         }
       }
     } catch (e) {
@@ -840,7 +1000,6 @@ const SeismicCheckPro = ({ initialData }) => {
                   <p>剛心K: ({analysisResult.rigidityX.toFixed(0)}, {analysisResult.rigidityY.toFixed(0)})</p>
                 </div>
 
-                {/* Chat & Optimization & Beam Sim */}
                 <div className="border-t pt-3">
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-xs font-bold">AI建築士チャット</span>
