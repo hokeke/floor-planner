@@ -155,6 +155,28 @@ const calculateAnalysis = (elements, buildingType, jsonFloorPlan, seismicGrade =
 };
 
 
+
+const ScoreGauge = ({ score, label, color }) => {
+  const radius = 30;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference - (Math.min(100, Math.max(0, score)) / 100) * circumference;
+
+  return (
+    <div className="flex flex-col items-center">
+      <div className="relative w-20 h-20">
+        <svg className="w-full h-full transform -rotate-90">
+          <circle cx="40" cy="40" r={radius} stroke="#e2e8f0" strokeWidth="6" fill="transparent" />
+          <circle cx="40" cy="40" r={radius} stroke={color} strokeWidth="6" fill="transparent" strokeDasharray={circumference} strokeDashoffset={offset} strokeLinecap="round" />
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center font-bold text-lg text-gray-700">
+          {score.toFixed(0)}<span className="text-[10px]">%</span>
+        </div>
+      </div>
+      <span className="text-xs text-gray-500 mt-1 font-medium">{label}</span>
+    </div>
+  );
+};
+
 const SeismicCheckPro = ({ initialData }) => {
   // State
   const [jsonFloorPlan, setJsonFloorPlan] = useState(null);
@@ -177,6 +199,7 @@ const SeismicCheckPro = ({ initialData }) => {
   // Gemini API State
   const [apiKey, setApiKey] = useState("");
   const [showApiKeyInput, setShowApiKeyInput] = useState(false);
+  const [activeSidebarTab, setActiveSidebarTab] = useState('edit'); // 'edit' or 'analysis'
 
   // Chat State
   const [chatMessages, setChatMessages] = useState([]);
@@ -1020,134 +1043,202 @@ const SeismicCheckPro = ({ initialData }) => {
         </div>
 
         <div className="w-96 bg-white border-l border-gray-200 flex flex-col overflow-y-auto shadow-xl z-20">
-          <div className="p-4 border-b border-gray-100">
-            <div className="mb-4">
-              <label className="text-xs font-bold text-gray-500">編集ツール</label>
-              <div className="grid grid-cols-3 gap-2 mt-2">
-                <button onClick={() => setTool('wall')} className={`p-2 border rounded flex flex-col items-center ${tool === 'wall' ? 'bg-red-50 border-red-500 text-red-600' : ''}`}><Move className="w-4 h-4 mb-1" /><span className="text-xs">耐力壁</span></button>
-                <button onClick={() => setTool('column')} className={`p-2 border rounded flex flex-col items-center ${tool === 'column' ? 'bg-blue-50 border-blue-500 text-blue-600' : ''}`}><MousePointer2 className="w-4 h-4 mb-1" /><span className="text-xs">柱</span></button>
-                <button onClick={() => setTool('eraser')} className={`p-2 border rounded flex flex-col items-center ${tool === 'eraser' ? 'bg-gray-100' : ''}`}><Trash2 className="w-4 h-4 mb-1" /><span className="text-xs">削除</span></button>
-              </div>
-            </div>
-
-            <div className="mb-4">
-              <label className="text-xs font-bold text-gray-500 flex items-center mb-1"><Layers className="w-3 h-3 mr-1" /> 壁倍率 (強度)</label>
-              <div className="flex items-center gap-2 mb-2">
-                <input type="number" value={wallMultiplier} onChange={(e) => setWallMultiplier(parseFloat(e.target.value) || 0)} step="0.1" min="0.1" max="10.0" className="w-20 text-xs border border-gray-300 rounded p-2 bg-white font-bold text-right" />
-                <span className="text-xs text-gray-500">倍</span>
-              </div>
-              <div className="grid grid-cols-4 gap-1">
-                {WALL_PRESETS.map(val => (
-                  <button key={val} onClick={() => setWallMultiplier(val)} className={`text-[10px] py-1 px-1 rounded border ${wallMultiplier === val ? 'bg-slate-600 text-white border-slate-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>{val.toFixed(1)}</button>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex gap-4 text-xs text-gray-600 mb-4">
-              <label className="flex items-center cursor-pointer"><input type="checkbox" checked={showAnalysis} onChange={e => setShowAnalysis(e.target.checked)} className="mr-1" /> 重心・剛心</label>
-              <label className="flex items-center cursor-pointer"><input type="checkbox" checked={showGrid} onChange={e => setShowGrid(e.target.checked)} className="mr-1" /> グリッド</label>
-              <label className="flex items-center cursor-pointer"><input type="checkbox" checked={showBeams} onChange={e => setShowBeams(e.target.checked)} className="mr-1" /> 梁(シミュ)</label>
-            </div>
-
-            {/* Seismic Grade Selector */}
-            <div className="mb-4">
-              <label className="text-xs font-bold text-gray-500 mb-1 block">目標耐震等級</label>
-              <div className="flex bg-white rounded-lg border border-gray-200 p-1">
-                {[1, 2, 3].map(g => (
-                  <button
-                    key={g}
-                    onClick={() => setSeismicGrade(g)}
-                    className={`flex-1 py-1 px-2 rounded text-xs font-medium transition-colors ${seismicGrade === g ? 'bg-orange-100 text-orange-800' : 'text-gray-500 hover:bg-gray-50'}`}
-                  >
-                    等級{g}
-                  </button>
-                ))}
-              </div>
-            </div>
+          {/* Sidebar Tabs */}
+          <div className="flex border-b border-gray-200 bg-gray-50">
+            <button
+              onClick={() => setActiveSidebarTab('edit')}
+              className={`flex-1 py-3 text-xs font-bold flex items-center justify-center gap-2 transition-colors ${activeSidebarTab === 'edit' ? 'bg-white text-purple-600 border-b-2 border-purple-600' : 'text-gray-500 hover:bg-gray-100'}`}
+            >
+              <Move className="w-4 h-4" /> 編集ツール
+            </button>
+            <button
+              onClick={() => setActiveSidebarTab('analysis')}
+              className={`flex-1 py-3 text-xs font-bold flex items-center justify-center gap-2 transition-colors ${activeSidebarTab === 'analysis' ? 'bg-white text-purple-600 border-b-2 border-purple-600' : 'text-gray-500 hover:bg-gray-100'}`}
+            >
+              <Activity className="w-4 h-4" /> 診断・AI
+            </button>
           </div>
 
-          {/* Analysis Report */}
-          <div className="flex-1 p-4">
-            <h2 className="text-xs font-bold text-gray-400 mb-3">構造診断レポート (精密版)</h2>
-            {analysisResult ? (
-              <div className="space-y-4">
-                <div className="bg-slate-50 p-3 rounded-lg text-center border border-slate-100">
-                  <div className="text-sm text-gray-500">判定結果</div>
-                  <div className={`text-xl font-bold ${analysisResult.balanceScore >= 100 && analysisResult.quantityScore >= 100 ? 'text-emerald-600' : analysisResult.balanceScore >= 60 && analysisResult.quantityScore >= 100 ? 'text-amber-600' : 'text-red-500'}`}>
-                    {analysisResult.balanceScore >= 100 && analysisResult.quantityScore >= 100 ? '優良 (Rank S)' : analysisResult.balanceScore >= 60 && analysisResult.quantityScore >= 100 ? '適合 (Rank A)' : '要注意 (Rank B)'}
+          <div className="flex-1 overflow-y-auto">
+            {activeSidebarTab === 'edit' && (
+              <div className="p-4">
+                <div className="mb-6">
+                  <label className="text-xs font-bold text-gray-500 block mb-2">描画ツール</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button onClick={() => setTool('wall')} className={`p-3 border rounded-lg flex flex-col items-center transition-all ${tool === 'wall' ? 'bg-red-50 border-red-500 text-red-600 shadow-sm' : 'hover:bg-gray-50'}`}><Move className="w-5 h-5 mb-1" /><span className="text-xs font-bold">耐力壁</span></button>
+                    <button onClick={() => setTool('column')} className={`p-3 border rounded-lg flex flex-col items-center transition-all ${tool === 'column' ? 'bg-blue-50 border-blue-500 text-blue-600 shadow-sm' : 'hover:bg-gray-50'}`}><MousePointer2 className="w-5 h-5 mb-1" /><span className="text-xs font-bold">柱</span></button>
+                    <button onClick={() => setTool('eraser')} className={`p-3 border rounded-lg flex flex-col items-center transition-all ${tool === 'eraser' ? 'bg-gray-100 border-gray-400 text-gray-700 shadow-inner' : 'hover:bg-gray-50'}`}><Trash2 className="w-5 h-5 mb-1" /><span className="text-xs font-bold">削除</span></button>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 mt-2 text-left text-xs">
-                    <div className="bg-white p-2 rounded border">
-                      <span className="block text-gray-400">壁量充足率</span>
-                      <span className={`font-bold text-base ${analysisResult.quantityScore >= 100 ? 'text-emerald-600' : 'text-red-500'}`}>{analysisResult.quantityScore.toFixed(0)}%</span>
-                    </div>
-                    <div className="bg-white p-2 rounded border">
-                      <span className="block text-gray-400">最大偏心率</span>
-                      <span className={`font-bold text-base ${Math.max(analysisResult.Rex, analysisResult.Rey) <= 0.15 ? 'text-emerald-600' : Math.max(analysisResult.Rex, analysisResult.Rey) <= 0.3 ? 'text-amber-600' : 'text-red-500'}`}>
-                        {Math.max(analysisResult.Rex, analysisResult.Rey).toFixed(3)}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="mt-2 text-[10px] text-gray-500 bg-white p-2 rounded border text-left space-y-1">
-                    <p>必要壁量: {analysisResult.targetStiffness.toFixed(0)} (等級{seismicGrade} × 床面積)</p>
-                    <p>存在壁量: {analysisResult.totalStiffness.toFixed(0)} (壁倍率考慮)</p>
-                  </div>
-                  <div className="text-[10px] text-gray-400 mt-1 text-left">※ 偏心率 0.15以下: 優良, 0.30以下: 適合</div>
                 </div>
 
-                <div className="text-xs space-y-1 text-gray-600">
-                  <p>偏心率X: {analysisResult.Rex.toFixed(3)} (Y方向の壁バランス)</p>
-                  <p>偏心率Y: {analysisResult.Rey.toFixed(3)} (X方向の壁バランス)</p>
-                  <p>重心G: ({analysisResult.centerX.toFixed(0)}, {analysisResult.centerY.toFixed(0)})</p>
-                  <p>剛心K: ({analysisResult.rigidityX.toFixed(0)}, {analysisResult.rigidityY.toFixed(0)})</p>
-                </div>
-
-                <div className="border-t pt-3">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-xs font-bold">AI建築士チャット</span>
-                    <button onClick={() => setShowApiKeyInput(!showApiKeyInput)}><Settings className="w-3 h-3 text-gray-400" /></button>
+                <div className="mb-6">
+                  <label className="text-xs font-bold text-gray-500 flex items-center mb-2"><Layers className="w-3 h-3 mr-1" /> 壁倍率 (強度)</label>
+                  <div className="flex items-center gap-2 mb-3">
+                    <input type="number" value={wallMultiplier} onChange={(e) => setWallMultiplier(parseFloat(e.target.value) || 0)} step="0.1" min="0.1" max="10.0" className="w-full text-lg border border-gray-300 rounded p-2 bg-white font-bold text-right focus:ring-2 focus:ring-purple-200 outline-none" />
+                    <span className="text-sm text-gray-500 font-bold">倍</span>
                   </div>
-                  {showApiKeyInput && (
-                    <input type="password" value={apiKey} onChange={e => { setApiKey(e.target.value); localStorage.setItem('gemini_api_key', e.target.value) }} placeholder="Gemini API Key" className="w-full text-xs border p-1 rounded mb-2" />
-                  )}
-
-                  <div className="grid grid-cols-2 gap-2 mb-2">
-                    <button onClick={() => generateAIAdvice("詳細な診断をお願いします。")} disabled={isLoadingAI || isOptimizing || isSimulatingBeams || isCalculatingStress} className="py-2 px-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold shadow-sm flex items-center justify-center disabled:opacity-50">
-                      {isLoadingAI ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Sparkles className="w-3 h-3 mr-1" />} 詳細アドバイス
-                    </button>
-
-                    <button onClick={optimizeStructure} disabled={isLoadingAI || isOptimizing || isSimulatingBeams || isCalculatingStress} className="py-2 px-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-lg text-xs font-bold shadow-sm flex items-center justify-center disabled:opacity-50">
-                      {isOptimizing ? <><Loader2 className="w-3 h-3 mr-1 animate-spin" />最適化中...</> : <><Wand2 className="w-3 h-3 mr-1" />AI自動最適化</>}
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 mb-2">
-                    <button onClick={simulateBeamLayout} disabled={isLoadingAI || isOptimizing || isSimulatingBeams || isCalculatingStress} className="py-2 px-2 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white rounded-lg text-xs font-bold shadow-sm flex items-center justify-center disabled:opacity-50">
-                      {isSimulatingBeams ? <><Loader2 className="w-3 h-3 mr-1 animate-spin" />梁シミュ...</> : <><Network className="w-3 h-3 mr-1" />梁掛けシミュ</>}
-                    </button>
-
-                    <button onClick={calculateAllowableStress} disabled={isLoadingAI || isOptimizing || isSimulatingBeams || isCalculatingStress} className="py-2 px-2 bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white rounded-lg text-xs font-bold shadow-sm flex items-center justify-center disabled:opacity-50">
-                      {isCalculatingStress ? <><Loader2 className="w-3 h-3 mr-1 animate-spin" />計算中...</> : <><Calculator className="w-3 h-3 mr-1" />許容応力度計算</>}
-                    </button>
-                  </div>
-
-                  <div className="h-48 overflow-y-auto bg-gray-50 rounded p-2 mb-2 border text-xs space-y-2">
-                    {chatMessages.map((m, i) => (
-                      <div key={i} className={`${m.role === 'user' ? 'text-right' : 'text-left'}`}>
-                        <span className={`inline-block p-2 rounded ${m.role === 'user' ? 'bg-purple-600 text-white' : 'bg-white border whitespace-pre-wrap'}`}>{m.text}</span>
-                      </div>
+                  <div className="grid grid-cols-4 gap-2">
+                    {WALL_PRESETS.map(val => (
+                      <button key={val} onClick={() => setWallMultiplier(val)} className={`text-xs py-2 px-1 rounded border font-medium transition-colors ${wallMultiplier === val ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>{val.toFixed(1)}</button>
                     ))}
-                    {(isLoadingAI || isSimulatingBeams || isCalculatingStress) && <Loader2 className="w-4 h-4 animate-spin mx-auto" />}
-                    <div ref={messagesEndRef} />
                   </div>
-                  <div className="flex gap-1">
-                    <textarea value={inputMessage} onChange={e => setInputMessage(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { handleSendMessage() } }} placeholder="Ctrl+Enterで送信" className="flex-1 text-xs border rounded p-1 h-8 resize-none" />
-                    <button onClick={() => handleSendMessage()} disabled={isLoadingAI} className="bg-purple-600 text-white rounded p-1 px-2 disabled:opacity-50"><Send className="w-4 h-4" /></button>
+                </div>
+
+                <div className="mb-6 bg-gray-50 p-3 rounded-lg border border-gray-100">
+                  <label className="text-xs font-bold text-gray-500 mb-2 block">表示設定</label>
+                  <div className="space-y-2">
+                    <label className="flex items-center cursor-pointer p-1 hover:bg-white rounded"><input type="checkbox" checked={showAnalysis} onChange={e => setShowAnalysis(e.target.checked)} className="mr-2" /> <span className="text-xs">重心・剛心を表示</span></label>
+                    <label className="flex items-center cursor-pointer p-1 hover:bg-white rounded"><input type="checkbox" checked={showGrid} onChange={e => setShowGrid(e.target.checked)} className="mr-2" /> <span className="text-xs">グリッドを表示</span></label>
+                    <label className="flex items-center cursor-pointer p-1 hover:bg-white rounded"><input type="checkbox" checked={showBeams} onChange={e => setShowBeams(e.target.checked)} className="mr-2" /> <span className="text-xs">梁(シミュレーション)を表示</span></label>
+                  </div>
+                </div>
+
+                <div className="mb-4">
+                  <label className="text-xs font-bold text-gray-500 mb-2 block">目標耐震等級</label>
+                  <div className="flex bg-white rounded-lg border border-gray-200 p-1">
+                    {[1, 2, 3].map(g => (
+                      <button
+                        key={g}
+                        onClick={() => setSeismicGrade(g)}
+                        className={`flex-1 py-2 px-2 rounded text-xs font-bold transition-colors ${seismicGrade === g ? 'bg-orange-100 text-orange-800 shadow-sm' : 'text-gray-400 hover:bg-gray-50'}`}
+                      >
+                        等級{g}
+                      </button>
+                    ))}
                   </div>
                 </div>
               </div>
-            ) : (
-              <div className="text-center text-gray-400 py-10"><Activity className="w-8 h-8 mx-auto mb-2 opacity-30" /><p>間取りを読み込むと<br />診断が始まります</p></div>
+            )}
+
+            {activeSidebarTab === 'analysis' && (
+              <div className="flex-1 p-4 flex flex-col min-h-0 h-full">
+                {analysisResult ? (
+                  <div className="flex flex-col h-full overflow-hidden">
+                    {/* Dashboard Cards */}
+                    <div className="grid grid-cols-1 gap-3 mb-4 shrink-0">
+                      {/* Overall Rank Card */}
+                      <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between">
+                        <div>
+                          <div className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-1">総合判定</div>
+                          <div className={`text-2xl font-black ${analysisResult.balanceScore >= 100 && analysisResult.quantityScore >= 100 ? 'text-emerald-500' : analysisResult.balanceScore >= 60 && analysisResult.quantityScore >= 100 ? 'text-amber-500' : 'text-red-500'}`}>
+                            {analysisResult.balanceScore >= 100 && analysisResult.quantityScore >= 100 ? 'RANK S' : analysisResult.balanceScore >= 60 && analysisResult.quantityScore >= 100 ? 'RANK A' : 'RANK B'}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-[10px] text-gray-400">偏心率バランス</div>
+                          <div className="font-bold text-gray-700">{analysisResult.maxRe.toFixed(3)}</div>
+                        </div>
+                      </div>
+
+                      {/* Gauges Row */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex justify-center py-4">
+                          <ScoreGauge
+                            score={analysisResult.quantityScore}
+                            label="壁量充足率"
+                            color={analysisResult.quantityScore >= 100 ? "#10b981" : "#ef4444"}
+                          />
+                        </div>
+                        <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100 flex justify-center py-4">
+                          <ScoreGauge
+                            score={analysisResult.balanceScore}
+                            label="バランススコア"
+                            color={analysisResult.balanceScore >= 80 ? "#10b981" : analysisResult.balanceScore >= 60 ? "#f59e0b" : "#ef4444"}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* AI Chat Section */}
+                    <div className="flex-1 bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col overflow-hidden min-h-[300px]">
+                      <div className="p-3 border-b border-gray-50 flex justify-between items-center bg-gray-50/50">
+                        <span className="text-xs font-bold text-gray-600 flex items-center gap-2">
+                          <Sparkles className="w-3 h-3 text-purple-500" /> AI構造設計士
+                        </span>
+                        <button onClick={() => setShowApiKeyInput(!showApiKeyInput)} className="text-gray-400 hover:text-gray-600"><Settings className="w-3 h-3" /></button>
+                      </div>
+
+                      {showApiKeyInput && (
+                        <div className="p-2 bg-gray-50 border-b">
+                          <input type="password" value={apiKey} onChange={e => { setApiKey(e.target.value); localStorage.setItem('gemini_api_key', e.target.value) }} placeholder="Gemini API Key" className="w-full text-xs border p-2 rounded bg-white" />
+                        </div>
+                      )}
+
+                      {/* Chat Messages Area */}
+                      <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-slate-50/30">
+                        {chatMessages.length === 0 && !isLoadingAI && (
+                          <div className="text-center py-8 text-gray-400 text-xs">
+                            <p>構造に関する質問や<br />改善案を聞いてみましょう</p>
+                          </div>
+                        )}
+
+                        {chatMessages.map((m, i) => (
+                          <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                            <div className={`max-w-[90%] p-3 rounded-2xl text-xs leading-relaxed shadow-sm ${m.role === 'user'
+                              ? 'bg-gradient-to-br from-purple-600 to-indigo-600 text-white rounded-tr-none'
+                              : 'bg-white border border-gray-100 text-gray-700 rounded-tl-none'
+                              }`}>
+                              <div className="whitespace-pre-wrap font-medium">{m.text}</div>
+                            </div>
+                          </div>
+                        ))}
+
+                        {(isLoadingAI || isOptimizing || isSimulatingBeams || isCalculatingStress) && (
+                          <div className="flex justify-start">
+                            <div className="bg-white border border-gray-100 p-3 rounded-2xl rounded-tl-none shadow-sm flex items-center gap-2">
+                              <Loader2 className="w-3 h-3 animate-spin text-purple-500" />
+                              <span className="text-xs text-gray-500 animate-pulse">AIが思考中...</span>
+                            </div>
+                          </div>
+                        )}
+                        <div ref={messagesEndRef} />
+                      </div>
+
+                      {/* Action Buttons & Input */}
+                      <div className="p-2 bg-white border-t border-gray-100">
+                        {/* Quick Actions */}
+                        <div className="grid grid-cols-2 gap-2 mb-2">
+                          <button onClick={() => generateAIAdvice("詳細な診断をお願いします。")} disabled={isLoadingAI} className="whitespace-nowrap px-3 py-2 bg-purple-50 text-purple-700 hover:bg-purple-100 rounded-lg text-[10px] font-bold border border-purple-100 flex items-center justify-center gap-1 transition-colors">
+                            <Sparkles className="w-3 h-3" /> 詳細診断
+                          </button>
+                          <button onClick={optimizeStructure} disabled={isOptimizing} className="whitespace-nowrap px-3 py-2 bg-amber-50 text-amber-700 hover:bg-amber-100 rounded-lg text-[10px] font-bold border border-amber-100 flex items-center justify-center gap-1 transition-colors">
+                            <Wand2 className="w-3 h-3" /> 自動最適化
+                          </button>
+                          <button onClick={simulateBeamLayout} disabled={isSimulatingBeams} className="whitespace-nowrap px-3 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 rounded-lg text-[10px] font-bold border border-emerald-100 flex items-center justify-center gap-1 transition-colors">
+                            <Network className="w-3 h-3" /> 梁シミュ
+                          </button>
+                          <button onClick={calculateAllowableStress} disabled={isCalculatingStress} className="whitespace-nowrap px-3 py-2 bg-cyan-50 text-cyan-700 hover:bg-cyan-100 rounded-lg text-[10px] font-bold border border-cyan-100 flex items-center justify-center gap-1 transition-colors">
+                            <Calculator className="w-3 h-3" /> 応力計算
+                          </button>
+                        </div>
+
+                        {/* Input Field */}
+                        <div className="flex gap-2 items-end">
+                          <textarea
+                            value={inputMessage}
+                            onChange={e => setInputMessage(e.target.value)}
+                            onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { handleSendMessage() } }}
+                            placeholder="AIに質問する..."
+                            className="flex-1 text-xs border border-gray-200 rounded-lg p-2 h-10 focus:ring-2 focus:ring-purple-100 focus:border-purple-300 outline-none resize-none transition-all"
+                          />
+                          <button
+                            onClick={() => handleSendMessage()}
+                            disabled={isLoadingAI || !inputMessage.trim()}
+                            className="h-10 w-10 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center justify-center shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          >
+                            <Send className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex-1 flex flex-col items-center justify-center text-gray-300">
+                    <Activity className="w-12 h-12 mb-3 opacity-20" />
+                    <p className="text-xs text-center">間取りを作成すると<br />リアルタイムで診断されます</p>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>

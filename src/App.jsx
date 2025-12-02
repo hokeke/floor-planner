@@ -68,6 +68,7 @@ function App() {
   const [selectedRoomId, setSelectedRoomId] = useState(null);
   const [selectedWallId, setSelectedWallId] = useState(null); // New state for selected wall
   const [selectedObjectId, setSelectedObjectId] = useState(null);
+  const [hoveredObjectId, setHoveredObjectId] = useState(null); // New state for hovered object
   const [draggingRoomId, setDraggingRoomId] = useState(null);
   const [dragStartPos, setDragStartPos] = useState(null); // World coordinates
   const [tool, setTool] = useState('select'); // 'room', 'select', 'wall'
@@ -404,6 +405,21 @@ function App() {
     }
 
     if (!draggingRoomEdge && !draggingRoomId && !draggingWallId && !interactionMode && tool === 'select') {
+      // Check for object hover
+      const hoveredObject = objects.slice().reverse().find(obj => {
+        // Transform point to object local space
+        const mouseMmX = pxToMm(worldPos.x);
+        const mouseMmY = pxToMm(worldPos.y);
+        const dx = mouseMmX - obj.x;
+        const dy = mouseMmY - obj.y;
+        const rad = -obj.rotation * Math.PI / 180;
+        const localX = dx * Math.cos(rad) - dy * Math.sin(rad);
+        const localY = dx * Math.sin(rad) + dy * Math.cos(rad);
+        return localX >= -obj.width / 2 && localX <= obj.width / 2 &&
+          localY >= -obj.height / 2 && localY <= obj.height / 2;
+      });
+      setHoveredObjectId(hoveredObject ? hoveredObject.id : null);
+
       if (selectedRoomId) {
         const selectedRoom = rooms.find(r => r.id === selectedRoomId);
         if (selectedRoom) {

@@ -19,7 +19,7 @@ import Chair from './objects/Chair';
 import WorkChair from './objects/WorkChair';
 import Column from './objects/Column';
 
-const ObjectRenderer = ({ obj, isSelected, scale, onHandleMouseDown, onObjectMouseDown }) => {
+const ObjectRenderer = ({ obj, isSelected, isHovered, scale, onHandleMouseDown, onObjectMouseDown }) => {
   const { x, y, width, height, rotation, type, flipX } = obj;
 
   // Convert mm to px
@@ -102,7 +102,7 @@ const ObjectRenderer = ({ obj, isSelected, scale, onHandleMouseDown, onObjectMou
           onObjectMouseDown(e, obj.id);
         }
       }}
-      style={{ cursor: 'move' }}
+      style={{ cursor: 'move', filter: isHovered ? 'drop-shadow(0 0 5px rgba(0, 123, 255, 0.5))' : 'none' }}
     >
       {renderObjectContent()}
       {obj.label && (
