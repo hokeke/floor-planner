@@ -135,16 +135,23 @@ const FloorPlanViewer3D = ({ initialData = null }) => {
     dirLight.shadow.camera.bottom = -60;
     scene.add(dirLight);
 
-    // Resize Handler
-    const handleResize = () => {
-      if (!mountRef.current) return;
-      const w = mountRef.current.clientWidth;
-      const h = mountRef.current.clientHeight;
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
-      renderer.setSize(w, h);
-    };
-    window.addEventListener('resize', handleResize);
+    // ★修正: ResizeObserverを使用して、コンテナのサイズ変更を正確に検知する
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (let entry of entries) {
+        if (entry.target === mountRef.current && cameraRef.current && rendererRef.current) {
+          const { width, height } = entry.contentRect;
+          // サイズが0の場合は処理しない（エラー防止）
+          if (width === 0 || height === 0) return;
+
+          cameraRef.current.aspect = width / height;
+          cameraRef.current.updateProjectionMatrix();
+          rendererRef.current.setSize(width, height);
+        }
+      }
+    });
+
+    // 監視開始
+    resizeObserver.observe(mountRef.current);
 
     // Animation Loop
     const animate = () => {
