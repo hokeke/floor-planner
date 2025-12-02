@@ -142,6 +142,83 @@ const calculateAnalysis = (elements, buildingType, jsonFloorPlan, seismicGrade =
     else quadrants.br += val;
   });
 
+  // 7. Four-Part Method (四分割法)
+  // Calculate Bounding Box of the building (based on walls and columns)
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  elements.forEach(el => {
+    if (el.type === 'wall') {
+      minX = Math.min(minX, el.x1, el.x2);
+      maxX = Math.max(maxX, el.x1, el.x2);
+      minY = Math.min(minY, el.y1, el.y2);
+      maxY = Math.max(maxY, el.y1, el.y2);
+    } else if (el.type === 'column') {
+      minX = Math.min(minX, el.x);
+      maxX = Math.max(maxX, el.x);
+      minY = Math.min(minY, el.y);
+      maxY = Math.max(maxY, el.y);
+    }
+  });
+
+  // Default if no elements
+  if (minX === Infinity) { minX = 0; maxX = 10000; minY = 0; maxY = 10000; }
+
+  const width = maxX - minX;
+  const height = maxY - minY;
+  const zoneWidth = width * 0.25;
+  const zoneHeight = height * 0.25;
+
+  // Define Zones
+  const zones = {
+    left: { boundary: minX + zoneWidth, actual: 0, required: targetStiffness / 4 }, // X direction walls in left 1/4
+    right: { boundary: maxX - zoneWidth, actual: 0, required: targetStiffness / 4 }, // X direction walls in right 1/4
+    top: { boundary: minY + zoneHeight, actual: 0, required: targetStiffness / 4 }, // Y direction walls in top 1/4
+    bottom: { boundary: maxY - zoneHeight, actual: 0, required: targetStiffness / 4 } // Y direction walls in bottom 1/4
+  };
+
+  elements.forEach(el => {
+    if (el.type !== 'wall') return;
+    const cx = (el.x1 + el.x2) / 2;
+    const cy = (el.y1 + el.y2) / 2;
+    const dx = Math.abs(el.x1 - el.x2);
+    const dy = Math.abs(el.y1 - el.y2);
+    const stiffness = el.length * (el.multiplier || 2.5);
+
+    // Check orientation and zone
+    if (dx < dy) { // Vertical Wall (contributes to Y-direction resistance, but for 4-part method we check X-position for Left/Right balance?)
+      // Wait, standard 4-part method checks:
+      // Side zones (Left/Right) check Y-direction resisting walls (Vertical walls)
+      // Top/Bottom zones check X-direction resisting walls (Horizontal walls)
+
+      // Vertical walls (Y-resistance) are checked in Left and Right zones
+      if (cx <= zones.left.boundary) zones.left.actual += stiffness;
+      if (cx >= zones.right.boundary) zones.right.actual += stiffness;
+    } else { // Horizontal Wall (contributes to X-direction resistance)
+      // Horizontal walls (X-resistance) are checked in Top and Bottom zones
+      if (cy <= zones.top.boundary) zones.top.actual += stiffness;
+      if (cy >= zones.bottom.boundary) zones.bottom.actual += stiffness;
+    }
+  });
+
+  // Calculate Ratios
+  const calcRatio = (actual, required) => required > 0 ? actual / required : 1;
+  const leftRatio = calcRatio(zones.left.actual, zones.left.required);
+  const rightRatio = calcRatio(zones.right.actual, zones.right.required);
+  const topRatio = calcRatio(zones.top.actual, zones.top.required);
+  const bottomRatio = calcRatio(zones.bottom.actual, zones.bottom.required);
+
+  // Wall Rate Ratios (壁率比)
+  // Ratio = Min / Max
+  const ratioX = Math.min(leftRatio, rightRatio) / Math.max(leftRatio, rightRatio) || 1; // Balance of Y-resistance (Left vs Right)
+  const ratioY = Math.min(topRatio, bottomRatio) / Math.max(topRatio, bottomRatio) || 1; // Balance of X-resistance (Top vs Bottom)
+
+  // Side Ratios (充足率)
+  const sideRatios = {
+    left: leftRatio,
+    right: rightRatio,
+    top: topRatio,
+    bottom: bottomRatio
+  };
+
   return {
     centerX, centerY, rigidityX, rigidityY,
     normCenterX: centerX, normCenterY: centerY,
@@ -150,7 +227,14 @@ const calculateAnalysis = (elements, buildingType, jsonFloorPlan, seismicGrade =
     balanceScore, quantityScore,
     targetStiffness, totalStiffness,
     quadrants,
-    gradeFactor
+    gradeFactor,
+    fourPart: {
+      zones,
+      sideRatios,
+      ratioX,
+      ratioY,
+      minX, maxX, minY, maxY
+    }
   };
 };
 
@@ -193,6 +277,7 @@ const SeismicCheckPro = ({ initialData }) => {
   const [showAnalysis, setShowAnalysis] = useState(true);
   const [showGrid, setShowGrid] = useState(true);
   const [showBeams, setShowBeams] = useState(true); // 梁の表示切替
+  const [showFourPart, setShowFourPart] = useState(false); // 四分割法の表示切替
 
   const [viewBox, setViewBox] = useState("0 0 100 100");
 
@@ -1022,6 +1107,25 @@ const SeismicCheckPro = ({ initialData }) => {
                     <line x1={analysisResult.centerX} y1={analysisResult.centerY} x2={analysisResult.rigidityX} y2={analysisResult.rigidityY} stroke="purple" strokeWidth="50" strokeDasharray="100,100" />
                   </>
                 )}
+
+                {/* Four-Part Method Visualization */}
+                {analysisResult && showFourPart && (
+                  <g>
+                    {/* Vertical Lines for Left/Right Zones */}
+                    <line x1={analysisResult.fourPart.zones.left.boundary} y1={analysisResult.fourPart.minY} x2={analysisResult.fourPart.zones.left.boundary} y2={analysisResult.fourPart.maxY} stroke="blue" strokeWidth="30" strokeDasharray="50,50" />
+                    <line x1={analysisResult.fourPart.zones.right.boundary} y1={analysisResult.fourPart.minY} x2={analysisResult.fourPart.zones.right.boundary} y2={analysisResult.fourPart.maxY} stroke="blue" strokeWidth="30" strokeDasharray="50,50" />
+
+                    {/* Horizontal Lines for Top/Bottom Zones */}
+                    <line x1={analysisResult.fourPart.minX} y1={analysisResult.fourPart.zones.top.boundary} x2={analysisResult.fourPart.maxX} y2={analysisResult.fourPart.zones.top.boundary} stroke="blue" strokeWidth="30" strokeDasharray="50,50" />
+                    <line x1={analysisResult.fourPart.minX} y1={analysisResult.fourPart.zones.bottom.boundary} x2={analysisResult.fourPart.maxX} y2={analysisResult.fourPart.zones.bottom.boundary} stroke="blue" strokeWidth="30" strokeDasharray="50,50" />
+
+                    {/* Zone Labels */}
+                    <text x={analysisResult.fourPart.minX + 100} y={analysisResult.fourPart.minY + 300} fontSize="300" fill="blue" opacity="0.5">左側端</text>
+                    <text x={analysisResult.fourPart.maxX - 1000} y={analysisResult.fourPart.minY + 300} fontSize="300" fill="blue" opacity="0.5">右側端</text>
+                    <text x={analysisResult.fourPart.minX + 100} y={analysisResult.fourPart.minY + 300} fontSize="300" fill="blue" opacity="0.5">上側端</text>
+                    <text x={analysisResult.fourPart.minX + 100} y={analysisResult.fourPart.maxY - 100} fontSize="300" fill="blue" opacity="0.5">下側端</text>
+                  </g>
+                )}
               </svg>
 
               {/* Tooltip Overlay */}
@@ -1090,6 +1194,7 @@ const SeismicCheckPro = ({ initialData }) => {
                     <label className="flex items-center cursor-pointer p-1 hover:bg-white rounded"><input type="checkbox" checked={showAnalysis} onChange={e => setShowAnalysis(e.target.checked)} className="mr-2" /> <span className="text-xs">重心・剛心を表示</span></label>
                     <label className="flex items-center cursor-pointer p-1 hover:bg-white rounded"><input type="checkbox" checked={showGrid} onChange={e => setShowGrid(e.target.checked)} className="mr-2" /> <span className="text-xs">グリッドを表示</span></label>
                     <label className="flex items-center cursor-pointer p-1 hover:bg-white rounded"><input type="checkbox" checked={showBeams} onChange={e => setShowBeams(e.target.checked)} className="mr-2" /> <span className="text-xs">梁(シミュレーション)を表示</span></label>
+                    <label className="flex items-center cursor-pointer p-1 hover:bg-white rounded"><input type="checkbox" checked={showFourPart} onChange={e => setShowFourPart(e.target.checked)} className="mr-2" /> <span className="text-xs">四分割法エリアを表示</span></label>
                   </div>
                 </div>
 
@@ -1146,6 +1251,35 @@ const SeismicCheckPro = ({ initialData }) => {
                             color={analysisResult.balanceScore >= 80 ? "#10b981" : analysisResult.balanceScore >= 60 ? "#f59e0b" : "#ef4444"}
                           />
                         </div>
+                      </div>
+                    </div>
+
+                    {/* Four-Part Method Card */}
+                    <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-3">
+                      <div className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-2">四分割法 (壁率比)</div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="flex flex-col items-center">
+                          <span className="text-[10px] text-gray-500 mb-1">X方向 (左右バランス)</span>
+                          <div className={`text-xl font-bold ${analysisResult.fourPart.ratioX >= 0.5 ? 'text-emerald-500' : 'text-red-500'}`}>
+                            {analysisResult.fourPart.ratioX.toFixed(2)}
+                          </div>
+                          <span className={`text-[10px] font-bold ${analysisResult.fourPart.ratioX >= 0.5 ? 'text-emerald-600' : 'text-red-600'}`}>
+                            {analysisResult.fourPart.ratioX >= 0.5 ? '適合' : '不適合'}
+                          </span>
+                        </div>
+                        <div className="flex flex-col items-center">
+                          <span className="text-[10px] text-gray-500 mb-1">Y方向 (上下バランス)</span>
+                          <div className={`text-xl font-bold ${analysisResult.fourPart.ratioY >= 0.5 ? 'text-emerald-500' : 'text-red-500'}`}>
+                            {analysisResult.fourPart.ratioY.toFixed(2)}
+                          </div>
+                          <span className={`text-[10px] font-bold ${analysisResult.fourPart.ratioY >= 0.5 ? 'text-emerald-600' : 'text-red-600'}`}>
+                            {analysisResult.fourPart.ratioY >= 0.5 ? '適合' : '不適合'}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="mt-3 pt-2 border-t border-gray-100 grid grid-cols-2 gap-2 text-[10px] text-gray-500">
+                        <div>左: {(analysisResult.fourPart.sideRatios.left * 100).toFixed(0)}% / 右: {(analysisResult.fourPart.sideRatios.right * 100).toFixed(0)}%</div>
+                        <div>上: {(analysisResult.fourPart.sideRatios.top * 100).toFixed(0)}% / 下: {(analysisResult.fourPart.sideRatios.bottom * 100).toFixed(0)}%</div>
                       </div>
                     </div>
 
