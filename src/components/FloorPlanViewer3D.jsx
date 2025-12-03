@@ -66,6 +66,9 @@ const FloorPlanViewer3D = ({ initialData = null, onClose }) => {
     door: 0x8B4513
   };
 
+  // 壁の衝突判定用ボックスリスト
+  const wallBoxesRef = useRef([]);
+
   // --- キーボードイベント設定 ---
   useEffect(() => {
     const handleKeyDown = (e) => { keysPressed.current[e.code] = true; };
@@ -102,7 +105,8 @@ const FloorPlanViewer3D = ({ initialData = null, onClose }) => {
     // Camera
     const width = mountRef.current.clientWidth;
     const height = mountRef.current.clientHeight;
-    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+    // nearを0.1から0.5に変更して、壁に近づいたときのクリッピングを軽減（壁の中が見えにくくなる）
+    const camera = new THREE.PerspectiveCamera(45, width / height, 0.5, 1000);
     camera.position.set(0, 50, 60);
     // カメラの回転順序をYXZ（水平回転してから垂直回転）に設定することで、FPS視点の挙動を安定させる
     camera.rotation.order = 'YXZ';
@@ -253,7 +257,27 @@ const FloorPlanViewer3D = ({ initialData = null, onClose }) => {
       if (forward.lengthSq() === 0) return;
 
       const move = forward.multiplyScalar(moveDistance);
-      cam.position.add(move);
+
+      // 簡易衝突判定（ホイール移動用）
+      const nextPos = cam.position.clone().add(move);
+      const playerRadius = 2.0; // プレイヤーの当たり判定半径
+      let collision = false;
+
+      // 壁との衝突チェック
+      const playerBox = new THREE.Box3();
+      playerBox.min.set(nextPos.x - playerRadius, nextPos.y - 10, nextPos.z - playerRadius);
+      playerBox.max.set(nextPos.x + playerRadius, nextPos.y + 10, nextPos.z + playerRadius);
+
+      for (const wallBox of wallBoxesRef.current) {
+        if (playerBox.intersectsBox(wallBox)) {
+          collision = true;
+          break;
+        }
+      }
+
+      if (!collision) {
+        cam.position.add(move);
+      }
       // OrbitControlsが無効なのでターゲット更新は不要
     };
     window.addEventListener('wheel', handleWheel);
@@ -500,7 +524,48 @@ const FloorPlanViewer3D = ({ initialData = null, onClose }) => {
 
         if (move.lengthSq() > 0) {
           move.normalize().multiplyScalar(moveSpeed);
-          cam.position.add(move);
+
+          // --- 衝突判定付き移動 ---
+          const playerRadius = 1.5; // プレイヤーの当たり判定半径
+          const currentPos = cam.position.clone();
+
+          // X軸方向の移動を試行
+          let nextX = currentPos.x + move.x;
+          let collisionX = false;
+
+          const playerBoxX = new THREE.Box3();
+          playerBoxX.min.set(nextX - playerRadius, currentPos.y - 10, currentPos.z - playerRadius);
+          playerBoxX.max.set(nextX + playerRadius, currentPos.y + 10, currentPos.z + playerRadius);
+
+          for (const wallBox of wallBoxesRef.current) {
+            if (playerBoxX.intersectsBox(wallBox)) {
+              collisionX = true;
+              break;
+            }
+          }
+
+          if (!collisionX) {
+            cam.position.x = nextX;
+          }
+
+          // Z軸方向の移動を試行
+          let nextZ = currentPos.z + move.z;
+          let collisionZ = false;
+
+          const playerBoxZ = new THREE.Box3();
+          playerBoxZ.min.set(cam.position.x - playerRadius, currentPos.y - 10, nextZ - playerRadius);
+          playerBoxZ.max.set(cam.position.x + playerRadius, currentPos.y + 10, nextZ + playerRadius);
+
+          for (const wallBox of wallBoxesRef.current) {
+            if (playerBoxZ.intersectsBox(wallBox)) {
+              collisionZ = true;
+              break;
+            }
+          }
+
+          if (!collisionZ) {
+            cam.position.z = nextZ;
+          }
         }
 
         drawMiniMap();
@@ -590,6 +655,8 @@ const FloorPlanViewer3D = ({ initialData = null, onClose }) => {
         wallGroupRef.current.remove(child);
       }
     }
+    // 衝突判定ボックスもクリア
+    wallBoxesRef.current = [];
   };
 
   const rebuildScene = (data) => {
@@ -637,6 +704,13 @@ const FloorPlanViewer3D = ({ initialData = null, onClose }) => {
       mesh.castShadow = true;
       mesh.receiveShadow = true;
       wallGroupRef.current.add(mesh);
+
+      // 衝突判定用ボックスの計算
+      // 回転したMeshのBoundingBoxはAABB（軸平行）になるため、大きめに取られてしまう。
+      // 正確な判定のためにはOBBが必要だが、簡易的にAABBで判定する。
+      // ただし、Box3.setFromObjectは回転を考慮したAABBを計算してくれる。
+      const box = new THREE.Box3().setFromObject(mesh);
+      wallBoxesRef.current.push(box);
     });
   };
 
