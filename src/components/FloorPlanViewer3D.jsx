@@ -8,7 +8,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
  * @param {Object} props
  * @param {Object} [props.initialData] - 初期表示する間取りJSONデータ (省略可)
  */
-const FloorPlanViewer3D = ({ initialData = null }) => {
+const FloorPlanViewer3D = ({ initialData = null, onClose }) => {
   const mountRef = useRef(null);
   const miniMapRef = useRef(null);
 
@@ -790,11 +790,23 @@ const FloorPlanViewer3D = ({ initialData = null }) => {
         className={`absolute bottom-4 right-4 rounded-lg shadow-lg border-2 border-white bg-white/90 transition-opacity duration-300 ${isWalkMode ? "opacity-100 cursor-pointer" : "opacity-0 pointer-events-none"}`}
       />
 
+      {/* --- BACK TO 2D BUTTON (Always Visible) --- */}
+      <button
+        onClick={onClose}
+        className="absolute top-4 left-4 py-2 px-4 bg-gray-600 text-white rounded-lg shadow-lg font-bold hover:bg-gray-700 transition-colors flex items-center justify-center gap-2"
+        title="2D編集に戻る"
+      >
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+        </svg>
+        2D編集に戻る
+      </button>
+
       {/* --- MENU TOGGLE BUTTON (When Closed) --- */}
       {!isMenuOpen && (
         <button
           onClick={() => setIsMenuOpen(true)}
-          className="absolute top-4 left-4 bg-white/90 p-2 rounded-lg shadow-lg hover:bg-white transition-colors"
+          className="absolute top-16 left-4 bg-white/90 p-2 rounded-lg shadow-lg hover:bg-white transition-colors"
           title="メニューを開く"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -804,7 +816,7 @@ const FloorPlanViewer3D = ({ initialData = null }) => {
       )}
 
       {/* --- CONTROL PANEL (Animated Slide) --- */}
-      <div className={`absolute top-4 left-4 bg-white/95 p-4 rounded-lg shadow-xl max-w-xs max-h-[90vh] overflow-y-auto transition-transform duration-300 ${isMenuOpen ? "translate-x-0" : "-translate-x-[120%]"}`}>
+      <div className={`absolute top-16 left-4 bg-white/95 p-4 rounded-lg shadow-xl max-w-xs max-h-[90vh] overflow-y-auto transition-transform duration-300 ${isMenuOpen ? "translate-x-0" : "-translate-x-[120%]"}`}>
 
         {/* Header with Close Button */}
         <div className="flex justify-between items-center border-b-2 border-gray-200 pb-2 mb-2">
