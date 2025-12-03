@@ -2,6 +2,7 @@ import React from 'react';
 import { OBJECT_TYPES } from '../constants';
 import { mmToPx } from '../utils/units';
 import Door from './objects/Door';
+import SlidingDoor from './objects/SlidingDoor';
 import Window from './objects/Window';
 import FixWindow from './objects/FixWindow';
 import Toilet from './objects/Toilet';
@@ -32,6 +33,8 @@ const ObjectRenderer = ({ obj, isSelected, isHovered, scale, onHandleMouseDown, 
     switch (type) {
       case 'door':
         return <Door width={widthPx} height={heightPx} scale={scale} />;
+      case 'sliding_door':
+        return <SlidingDoor width={widthPx} height={heightPx} scale={scale} />;
       case 'window':
         return <Window width={widthPx} height={heightPx} scale={scale} />;
       case 'fix_window':

@@ -686,6 +686,7 @@ const FloorPlanViewer3D = ({ initialData = null, onClose }) => {
             objDepth = WALL_THICKNESS * 1.5;
             break;
           case 'door':
+          case 'sliding_door':
             objHeight = 2000 * MM_TO_SCENE;
             elevation = 0;
             color = COLORS.door;
