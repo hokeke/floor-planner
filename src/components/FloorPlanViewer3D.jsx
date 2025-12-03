@@ -689,7 +689,7 @@ const FloorPlanViewer3D = ({ initialData = null, onClose }) => {
             objHeight = 2000 * MM_TO_SCENE;
             elevation = 0;
             color = COLORS.door;
-            objDepth = 50 * MM_TO_SCENE;
+            objDepth = WALL_THICKNESS * 1.2; // 壁より少し厚くして表示させる
             break;
           case 'kitchen':
             objHeight = 850 * MM_TO_SCENE;
