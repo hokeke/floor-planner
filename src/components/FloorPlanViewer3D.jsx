@@ -87,7 +87,8 @@ const FloorPlanViewer3D = ({ initialData = null, onClose }) => {
     // Scene
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x333333);
-    scene.fog = new THREE.Fog(0x333333, 20, 150);
+    // ズームアウト時に暗くならないようにフォグの距離を調整
+    scene.fog = new THREE.Fog(0x333333, 200, 1000);
     sceneRef.current = scene;
 
     // Group
