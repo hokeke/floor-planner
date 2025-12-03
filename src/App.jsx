@@ -11,6 +11,7 @@ import ObjectRenderer from './components/ObjectRenderer';
 import Snackbar from './components/Snackbar';
 import DimensionAnnotations from './components/DimensionAnnotations';
 import SeismicCheckPro from './components/SeismicCheckPro';
+import FloorPlanViewer3D from './components/FloorPlanViewer3D';
 import './index.css';
 
 function App() {
@@ -26,6 +27,7 @@ function App() {
   const [isPanning, setIsPanning] = useState(false);
   const [lastMousePos, setLastMousePos] = useState(null);
   const [isSeismicModalOpen, setIsSeismicModalOpen] = useState(false);
+  const [is3DViewOpen, setIs3DViewOpen] = useState(false);
   const [seismicData, setSeismicData] = useState(null);
 
   const svgRef = useRef(null);
@@ -1091,6 +1093,7 @@ function App() {
           setSeismicData(data);
           setIsSeismicModalOpen(true);
         }}
+        onOpen3D={() => setIs3DViewOpen(true)}
       />
 
       {/* Hidden file input for loading */}
@@ -1476,6 +1479,16 @@ function App() {
               <SeismicCheckPro initialData={seismicData} />
             </div>
           </div>
+        </div>
+      )}
+
+      {/* 3D Viewer Modal */}
+      {is3DViewOpen && (
+        <div className="fixed inset-0 z-50 bg-black">
+          <FloorPlanViewer3D
+            initialData={{ rooms, walls, objects }}
+            onClose={() => setIs3DViewOpen(false)}
+          />
         </div>
       )}
     </div>

@@ -38,6 +38,7 @@ const FloorPlanViewer3D = ({ initialData = null }) => {
   const [wallOpacity, setWallOpacity] = useState(1.0);
   const [isWalkMode, setIsWalkMode] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(true); // メニュー開閉状態
+  const [sceneInitialized, setSceneInitialized] = useState(false); // シーン初期化完了フラグ
 
   // 定数
   const MM_TO_SCENE = 0.01; // 100mm = 1 unit
@@ -111,6 +112,14 @@ const FloorPlanViewer3D = ({ initialData = null }) => {
     renderer.setSize(width, height);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    // キャンバスを親要素内に正しく配置するためのスタイル設定
+    renderer.domElement.style.position = 'absolute';
+    renderer.domElement.style.top = '0';
+    renderer.domElement.style.left = '0';
+    renderer.domElement.style.width = '100%';
+    renderer.domElement.style.height = '100%';
+
     mountRef.current.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
@@ -153,14 +162,20 @@ const FloorPlanViewer3D = ({ initialData = null }) => {
     // 監視開始
     resizeObserver.observe(mountRef.current);
 
-    // Animation Loop
-    const animate = () => {
-      requestRef.current = requestAnimationFrame(animate);
-      // controls.update() は WalkMode 時には呼ばない（自前制御するため）
-      if (!isWalkModeRef.current && controlsRef.current) {
-        controlsRef.current.update();
+    // シーン初期化完了を通知
+    setSceneInitialized(true);
+
+    // クリーンアップ
+    return () => {
+      resizeObserver.disconnect();
+      if (requestRef.current) {
+        cancelAnimationFrame(requestRef.current);
       }
-      renderer.render(scene, camera);
+      if (mountRef.current && renderer.domElement) {
+        mountRef.current.removeChild(renderer.domElement);
+      }
+      renderer.dispose();
+      setSceneInitialized(false);
     };
   }, []);
 
@@ -494,6 +509,17 @@ const FloorPlanViewer3D = ({ initialData = null }) => {
       }
 
       if (rendererRef.current && sceneRef.current && cam) {
+        // 最初の数フレームだけログを出力
+        if (!window._3dDebugFrameCount) window._3dDebugFrameCount = 0;
+        if (window._3dDebugFrameCount < 3) {
+          console.log('[3D DEBUG] Rendering frame', window._3dDebugFrameCount, {
+            sceneChildren: sceneRef.current.children.length,
+            cameraPos: cam.position,
+            cameraTarget: controlsRef.current?.target,
+            rendererSize: { width: rendererRef.current.domElement.width, height: rendererRef.current.domElement.height }
+          });
+          window._3dDebugFrameCount++;
+        }
         rendererRef.current.render(sceneRef.current, cam);
       }
     };
@@ -510,9 +536,11 @@ const FloorPlanViewer3D = ({ initialData = null }) => {
   // --- シーン構築 ---
   useEffect(() => {
     floorPlanDataRef.current = floorPlanData;
-    if (!floorPlanData || !sceneRef.current) return;
+    if (!floorPlanData || !sceneRef.current || !sceneInitialized) {
+      return;
+    }
     rebuildScene(floorPlanData);
-  }, [floorPlanData, wallHeight, wallOpacity]);
+  }, [floorPlanData, wallHeight, wallOpacity, sceneInitialized]);
 
 
   // データから中心座標と範囲を計算 (mm単位)
@@ -569,6 +597,17 @@ const FloorPlanViewer3D = ({ initialData = null }) => {
     centerMmRef.current = centerMm;
     buildWalls(data, centerMm);
     buildFloorsAndObjects(data, centerMm);
+
+    // カメラのターゲットをシーンの中心に設定（これがないと床が見えない）
+    if (controlsRef.current && !isWalkModeRef.current && cameraRef.current) {
+      // カメラのターゲットを原点に
+      controlsRef.current.target.set(0, 0, 0);
+
+      // カメラの位置もリセット（床を見やすい位置に）
+      cameraRef.current.position.set(0, 50, 60);
+
+      controlsRef.current.update();
+    }
   };
 
   const buildWalls = (data, center) => {
@@ -742,7 +781,7 @@ const FloorPlanViewer3D = ({ initialData = null }) => {
 
   return (
     <div className="relative w-full h-screen bg-gray-900 overflow-hidden text-gray-800">
-      <div ref={mountRef} className="w-full h-full cursor-pointer" />
+      <div ref={mountRef} className="relative w-full h-full cursor-pointer"></div>
       <canvas
         ref={miniMapRef}
         width="200"
@@ -785,8 +824,8 @@ const FloorPlanViewer3D = ({ initialData = null }) => {
           <button
             onClick={() => setIsWalkMode(!isWalkMode)}
             className={`w-full py-2 px-4 rounded font-bold transition-colors ${isWalkMode
-                ? "bg-green-600 text-white hover:bg-green-700"
-                : "bg-blue-600 text-white hover:bg-blue-700"
+              ? "bg-green-600 text-white hover:bg-green-700"
+              : "bg-blue-600 text-white hover:bg-blue-700"
               }`}
           >
             {isWalkMode ? "🚶‍♂️ 歩行モード中 (終了)" : "🦅 俯瞰モード (歩く)"}

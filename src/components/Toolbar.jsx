@@ -1,6 +1,6 @@
 import React from 'react';
 import { ROOM_TYPES, OBJECT_TYPES } from '../constants';
-import { MousePointer2, Square, Grid, Box, Hexagon, Armchair, ZoomIn, Save, Upload, Activity } from 'lucide-react';
+import { MousePointer2, Square, Grid, Box, Hexagon, Armchair, ZoomIn, Save, Upload, Activity, Cuboid } from 'lucide-react';
 
 function Toolbar({
   tool,
@@ -16,7 +16,8 @@ function Toolbar({
   setPan,
   onSave,
   onLoad,
-  onOpenSeismicCheck
+  onOpenSeismicCheck,
+  onOpen3D
 }) {
   return (
     <header className="bg-white border-b border-slate-200 px-4 py-2 flex items-center justify-between shadow-sm z-20 relative h-[60px]">
@@ -30,8 +31,8 @@ function Toolbar({
           {/* Select Tool */}
           <button
             className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${tool === 'select'
-                ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
-                : 'text-slate-600 hover:bg-slate-50 border border-transparent'
+              ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+              : 'text-slate-600 hover:bg-slate-50 border border-transparent'
               }`}
             onClick={() => setTool('select')}
           >
@@ -43,8 +44,8 @@ function Toolbar({
           <div className="flex items-center gap-1 bg-slate-50 rounded-md p-1 border border-slate-200">
             <button
               className={`flex items-center gap-2 px-3 py-1.5 rounded-sm text-sm font-medium transition-colors ${tool === 'room'
-                  ? 'bg-white text-indigo-700 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-white text-indigo-700 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
                 }`}
               onClick={() => setTool('room')}
             >
@@ -68,8 +69,8 @@ function Toolbar({
           <div className="flex items-center gap-1 bg-slate-50 rounded-md p-1 border border-slate-200">
             <button
               className={`flex items-center gap-2 px-3 py-1.5 rounded-sm text-sm font-medium transition-colors ${tool === 'wall'
-                  ? 'bg-white text-indigo-700 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-white text-indigo-700 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
                 }`}
               onClick={() => setTool('wall')}
             >
@@ -91,8 +92,8 @@ function Toolbar({
           {/* Polygon Tool */}
           <button
             className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${tool === 'custom_object'
-                ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
-                : 'text-slate-600 hover:bg-slate-50 border border-transparent'
+              ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+              : 'text-slate-600 hover:bg-slate-50 border border-transparent'
               }`}
             onClick={() => setTool('custom_object')}
           >
@@ -104,8 +105,8 @@ function Toolbar({
           <div className="flex items-center gap-1 bg-slate-50 rounded-md p-1 border border-slate-200">
             <button
               className={`flex items-center gap-2 px-3 py-1.5 rounded-sm text-sm font-medium transition-colors ${tool === 'object'
-                  ? 'bg-white text-indigo-700 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-white text-indigo-700 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
                 }`}
               onClick={() => setTool('object')}
             >
@@ -162,6 +163,13 @@ function Toolbar({
           >
             <Activity className="w-4 h-4" />
             耐震チェック
+          </button>
+          <button
+            onClick={onOpen3D}
+            className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-md text-sm font-bold hover:from-blue-600 hover:to-indigo-600 transition-all shadow-sm hover:shadow-md"
+          >
+            <Cuboid className="w-4 h-4" />
+            3D表示
           </button>
         </div>
       </div>
