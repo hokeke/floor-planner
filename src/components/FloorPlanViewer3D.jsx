@@ -522,6 +522,15 @@ const FloorPlanViewer3D = ({ initialData = null, onClose }) => {
         if (keysPressed.current['KeyA'] || keysPressed.current['ArrowLeft']) move.sub(right);
         if (keysPressed.current['KeyD'] || keysPressed.current['ArrowRight']) move.add(right);
 
+        // ★追加: PageUp/PageDownで回転
+        const rotateSpeedKey = 0.03;
+        if (keysPressed.current['PageUp']) {
+          cam.rotation.y += rotateSpeedKey;
+        }
+        if (keysPressed.current['PageDown']) {
+          cam.rotation.y -= rotateSpeedKey;
+        }
+
         if (move.lengthSq() > 0) {
           move.normalize().multiplyScalar(moveSpeed);
 
