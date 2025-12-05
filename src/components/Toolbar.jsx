@@ -17,7 +17,8 @@ function Toolbar({
   onSave,
   onLoad,
   onOpenSeismicCheck,
-  onOpen3D
+  onOpen3D,
+  onSavePNG
 }) {
   return (
     <header className="bg-white border-b border-slate-200 px-4 py-2 flex items-center justify-between shadow-sm z-20 relative h-[60px]">
@@ -156,6 +157,13 @@ function Toolbar({
           >
             <Upload className="w-4 h-4" />
             読込
+          </button>
+          <button
+            onClick={onSavePNG}
+            className="flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-300 text-slate-700 rounded-md text-sm font-medium hover:bg-slate-50 transition-colors shadow-sm"
+          >
+            <Save className="w-4 h-4" />
+            画像保存
           </button>
           <button
             onClick={onOpenSeismicCheck}

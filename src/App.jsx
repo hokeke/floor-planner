@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Grid from './components/Grid';
 import Toolbar from './components/Toolbar';
 import PropertiesPanel from './components/PropertiesPanel';
@@ -28,9 +28,10 @@ function App() {
   const [lastMousePos, setLastMousePos] = useState(null);
   const [isSeismicModalOpen, setIsSeismicModalOpen] = useState(false);
   const [is3DViewOpen, setIs3DViewOpen] = useState(false);
+  const svgRef = useRef(null);
   const [seismicData, setSeismicData] = useState(null);
 
-  const svgRef = useRef(null);
+
 
   // Use custom hooks
   const {
@@ -91,6 +92,130 @@ function App() {
   const [draggingWallHandle, setDraggingWallHandle] = useState(null); // { wallId, handle: 'start' | 'end' }
 
   const getMousePos = (e) => getViewportMousePos(e, svgRef);
+  const handleSavePNG = useCallback(() => {
+    if (!svgRef.current) return;
+
+    // Calculate bounding box of all elements
+    let minX = Infinity, maxX = -Infinity;
+    let minY = Infinity, maxY = -Infinity;
+
+    // Check walls
+    if (walls.length > 0) {
+      walls.forEach(wall => {
+        const startX = mmToPx(pxToMm(wall.start.x));
+        const startY = mmToPx(pxToMm(wall.start.y));
+        const endX = mmToPx(pxToMm(wall.end.x));
+        const endY = mmToPx(pxToMm(wall.end.y));
+
+        minX = Math.min(minX, startX, endX);
+        maxX = Math.max(maxX, startX, endX);
+        minY = Math.min(minY, startY, endY);
+        maxY = Math.max(maxY, startY, endY);
+      });
+    }
+
+    // Check objects
+    if (objects.length > 0) {
+      objects.forEach(obj => {
+        const x = mmToPx(obj.x);
+        const y = mmToPx(obj.y);
+        const width = mmToPx(obj.width);
+        const height = mmToPx(obj.height);
+
+        // Simple bounding box for objects (ignoring rotation for simplicity of bounds, or taking max)
+        // For better accuracy with rotation, we'd need to calculate corners.
+        // Here we'll just take a safe margin or the center +/- dimension/2
+        // Objects are centered at x,y
+        const halfW = width / 2;
+        const halfH = height / 2;
+        // Using a slightly larger box to account for rotation
+        const radius = Math.sqrt(halfW * halfW + halfH * halfH);
+
+        minX = Math.min(minX, x - radius);
+        maxX = Math.max(maxX, x + radius);
+        minY = Math.min(minY, y - radius);
+        maxY = Math.max(maxY, y + radius);
+      });
+    }
+
+    // Check rooms (if any, though walls usually define the extent)
+    if (rooms.length > 0) {
+      rooms.forEach(room => {
+        room.points.forEach(p => {
+          minX = Math.min(minX, p.x);
+          maxX = Math.max(maxX, p.x);
+          minY = Math.min(minY, p.y);
+          maxY = Math.max(maxY, p.y);
+        });
+      });
+    }
+
+    // If no elements, use default view
+    if (minX === Infinity) {
+      const rect = svgRef.current.getBoundingClientRect();
+      minX = 0;
+      minY = 0;
+      maxX = rect.width;
+      maxY = rect.height;
+    }
+
+    // Add padding to include dimension annotations
+    // Dimensions extend up to 1.5 * 910mm (approx 1365mm) from the walls.
+    // We add extra buffer for text labels.
+    const PADDING = mmToPx(2000); // 2000mm padding
+    minX -= PADDING;
+    minY -= PADDING;
+    maxX += PADDING;
+    maxY += PADDING;
+
+    const width = maxX - minX;
+    const height = maxY - minY;
+
+    // Clone the SVG
+    const clone = svgRef.current.cloneNode(true);
+
+    // Set viewBox to cover the content
+    clone.setAttribute('viewBox', `${minX} ${minY} ${width} ${height}`);
+    clone.setAttribute('width', width);
+    clone.setAttribute('height', height);
+
+    // Remove transform from the main group to reset pan/zoom
+    // The main group is the first 'g' element in our structure
+    const mainGroup = clone.querySelector('g');
+    if (mainGroup) {
+      mainGroup.removeAttribute('transform');
+    }
+
+    // Serialize
+    const svgData = new XMLSerializer().serializeToString(clone);
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+
+    canvas.width = width;
+    canvas.height = height;
+
+    const blob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+
+    img.onload = () => {
+      ctx.fillStyle = 'white';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0);
+      const pngUrl = canvas.toDataURL('image/png');
+      const link = document.createElement('a');
+      link.href = pngUrl;
+      link.download = `floorplan_${new Date().toISOString().slice(0, 10)}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    };
+
+    img.src = url;
+  }, [walls, objects, rooms]);
+
   const handleWheel = (e) => handleViewportWheel(e, svgRef);
 
   const handleMouseDown = (e) => {
@@ -1082,6 +1207,7 @@ function App() {
         setPan={setPan}
         onSave={handleSave}
         onLoad={handleLoad}
+        onSavePNG={handleSavePNG}
         onOpenSeismicCheck={() => {
           const data = {
             version: 1,
