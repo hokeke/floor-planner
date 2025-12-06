@@ -656,6 +656,8 @@ const SeismicCheckPro = ({ initialData }) => {
         `;
       const userPrompt = `
           条件:
+          - 目標耐震等級: ${seismicGrade}
+          - 必要壁量: ${analysisResult.targetStiffness.toFixed(0)}
           - 壁倍率: ${wallMultiplier}倍
           - 重心位置: (X:${analysisResult.centerX.toFixed(0)}, Y:${analysisResult.centerY.toFixed(0)})
           - 壁候補: ${JSON.stringify(candidateList)}
