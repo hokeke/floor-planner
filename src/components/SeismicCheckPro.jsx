@@ -481,7 +481,10 @@ const SeismicCheckPro = ({ initialData }) => {
       setElements([...elements, { id: generateId(), type: 'column', x: pos.x, y: pos.y, strength: COLUMN_STRENGTH }]);
     } else if (tool === 'eraser') {
       const threshold = 500;
-      setElements(elements.filter(el => {
+      let closestEl = null;
+      let minDist = Infinity;
+
+      elements.forEach(el => {
         let dist;
         if (el.type === 'wall') {
           const A = pos.x - el.x1, B = pos.y - el.y1, C = el.x2 - el.x1, D = el.y2 - el.y1;
@@ -496,8 +499,16 @@ const SeismicCheckPro = ({ initialData }) => {
         } else {
           dist = Math.sqrt(Math.pow(el.x - pos.x, 2) + Math.pow(el.y - pos.y, 2));
         }
-        return dist > threshold;
-      }));
+
+        if (dist <= threshold && dist < minDist) {
+          minDist = dist;
+          closestEl = el;
+        }
+      });
+
+      if (closestEl) {
+        setElements(elements.filter(e => e.id !== closestEl.id));
+      }
     }
   };
 
