@@ -1257,33 +1257,35 @@ const SeismicCheckPro = ({ initialData }) => {
                     </div>
 
                     {/* Four-Part Method Card */}
-                    <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-3">
-                      <div className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-2">四分割法 (壁率比)</div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="flex flex-col items-center">
-                          <span className="text-[10px] text-gray-500 mb-1">X方向 (左右バランス)</span>
-                          <div className={`text-xl font-bold ${analysisResult.fourPart.ratioX >= 0.5 ? 'text-emerald-500' : 'text-red-500'}`}>
-                            {analysisResult.fourPart.ratioX.toFixed(2)}
+                    {showFourPart && (
+                      <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 mb-3">
+                        <div className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-2">四分割法 (壁率比)</div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="flex flex-col items-center">
+                            <span className="text-[10px] text-gray-500 mb-1">X方向 (左右バランス)</span>
+                            <div className={`text-xl font-bold ${analysisResult.fourPart.ratioX >= 0.5 ? 'text-emerald-500' : 'text-red-500'}`}>
+                              {analysisResult.fourPart.ratioX.toFixed(2)}
+                            </div>
+                            <span className={`text-[10px] font-bold ${analysisResult.fourPart.ratioX >= 0.5 ? 'text-emerald-600' : 'text-red-600'}`}>
+                              {analysisResult.fourPart.ratioX >= 0.5 ? '適合' : '不適合'}
+                            </span>
                           </div>
-                          <span className={`text-[10px] font-bold ${analysisResult.fourPart.ratioX >= 0.5 ? 'text-emerald-600' : 'text-red-600'}`}>
-                            {analysisResult.fourPart.ratioX >= 0.5 ? '適合' : '不適合'}
-                          </span>
+                          <div className="flex flex-col items-center">
+                            <span className="text-[10px] text-gray-500 mb-1">Y方向 (上下バランス)</span>
+                            <div className={`text-xl font-bold ${analysisResult.fourPart.ratioY >= 0.5 ? 'text-emerald-500' : 'text-red-500'}`}>
+                              {analysisResult.fourPart.ratioY.toFixed(2)}
+                            </div>
+                            <span className={`text-[10px] font-bold ${analysisResult.fourPart.ratioY >= 0.5 ? 'text-emerald-600' : 'text-red-600'}`}>
+                              {analysisResult.fourPart.ratioY >= 0.5 ? '適合' : '不適合'}
+                            </span>
+                          </div>
                         </div>
-                        <div className="flex flex-col items-center">
-                          <span className="text-[10px] text-gray-500 mb-1">Y方向 (上下バランス)</span>
-                          <div className={`text-xl font-bold ${analysisResult.fourPart.ratioY >= 0.5 ? 'text-emerald-500' : 'text-red-500'}`}>
-                            {analysisResult.fourPart.ratioY.toFixed(2)}
-                          </div>
-                          <span className={`text-[10px] font-bold ${analysisResult.fourPart.ratioY >= 0.5 ? 'text-emerald-600' : 'text-red-600'}`}>
-                            {analysisResult.fourPart.ratioY >= 0.5 ? '適合' : '不適合'}
-                          </span>
+                        <div className="mt-3 pt-2 border-t border-gray-100 grid grid-cols-2 gap-2 text-[10px] text-gray-500">
+                          <div>左: {(analysisResult.fourPart.sideRatios.left * 100).toFixed(0)}% / 右: {(analysisResult.fourPart.sideRatios.right * 100).toFixed(0)}%</div>
+                          <div>上: {(analysisResult.fourPart.sideRatios.top * 100).toFixed(0)}% / 下: {(analysisResult.fourPart.sideRatios.bottom * 100).toFixed(0)}%</div>
                         </div>
                       </div>
-                      <div className="mt-3 pt-2 border-t border-gray-100 grid grid-cols-2 gap-2 text-[10px] text-gray-500">
-                        <div>左: {(analysisResult.fourPart.sideRatios.left * 100).toFixed(0)}% / 右: {(analysisResult.fourPart.sideRatios.right * 100).toFixed(0)}%</div>
-                        <div>上: {(analysisResult.fourPart.sideRatios.top * 100).toFixed(0)}% / 下: {(analysisResult.fourPart.sideRatios.bottom * 100).toFixed(0)}%</div>
-                      </div>
-                    </div>
+                    )}
 
                     {/* AI Chat Section */}
                     <div className="flex-1 bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col overflow-hidden min-h-[300px]">
