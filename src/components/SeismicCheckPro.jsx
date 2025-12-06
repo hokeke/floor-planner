@@ -1083,8 +1083,8 @@ const SeismicCheckPro = ({ initialData }) => {
     if (!showGrid) return null;
     const [vx, vy, vw, vh] = viewBox.split(' ').map(Number);
     const lines = [];
-    for (let x = Math.floor(vx / MODULE_GRID) * MODULE_GRID; x <= vx + vw; x += MODULE_GRID) lines.push(<line key={`v${x}`} x1={x} y1={vy} x2={x} y2={vy + vh} stroke="#eee" strokeWidth="5" />);
-    for (let y = Math.floor(vy / MODULE_GRID) * MODULE_GRID; y <= vy + vh; y += MODULE_GRID) lines.push(<line key={`h${y}`} x1={vx} y1={y} x2={vx + vw} y2={y} stroke="#eee" strokeWidth="5" />);
+    for (let x = Math.floor(vx / MODULE_GRID) * MODULE_GRID; x <= vx + vw; x += MODULE_GRID) lines.push(<line key={`v${x}`} x1={x} y1={vy} x2={x} y2={vy + vh} stroke="#d1d5db" strokeWidth="5" />);
+    for (let y = Math.floor(vy / MODULE_GRID) * MODULE_GRID; y <= vy + vh; y += MODULE_GRID) lines.push(<line key={`h${y}`} x1={vx} y1={y} x2={vx + vw} y2={y} stroke="#d1d5db" strokeWidth="5" />);
     return <g>{lines}</g>;
   };
 
