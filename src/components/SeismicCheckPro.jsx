@@ -1061,6 +1061,12 @@ const SeismicCheckPro = ({ initialData }) => {
     }
   };
 
+  const clearAllWalls = () => {
+    if (window.confirm("全ての耐力壁を削除してもよろしいですか？")) {
+      setElements(elements.filter(el => el.type !== 'wall'));
+    }
+  };
+
   // Render Grid
   const renderGrid = () => {
     if (!showGrid) return null;
@@ -1208,10 +1214,11 @@ const SeismicCheckPro = ({ initialData }) => {
               <div className="p-4">
                 <div className="mb-6">
                   <label className="text-xs font-bold text-gray-500 block mb-2">描画ツール</label>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-4 gap-2">
                     <button onClick={() => setTool('wall')} className={`p-3 border rounded-lg flex flex-col items-center transition-all ${tool === 'wall' ? 'bg-red-50 border-red-500 text-red-600 shadow-sm' : 'hover:bg-gray-50'}`}><Move className="w-5 h-5 mb-1" /><span className="text-xs font-bold">耐力壁</span></button>
                     <button onClick={() => setTool('column')} className={`p-3 border rounded-lg flex flex-col items-center transition-all ${tool === 'column' ? 'bg-blue-50 border-blue-500 text-blue-600 shadow-sm' : 'hover:bg-gray-50'}`}><MousePointer2 className="w-5 h-5 mb-1" /><span className="text-xs font-bold">柱</span></button>
                     <button onClick={() => setTool('eraser')} className={`p-3 border rounded-lg flex flex-col items-center transition-all ${tool === 'eraser' ? 'bg-gray-100 border-gray-400 text-gray-700 shadow-inner' : 'hover:bg-gray-50'}`}><Trash2 className="w-5 h-5 mb-1" /><span className="text-xs font-bold">削除</span></button>
+                    <button onClick={clearAllWalls} className="p-3 border rounded-lg flex flex-col items-center transition-all hover:bg-red-50 text-red-600 border-red-200"><Trash2 className="w-5 h-5 mb-1" /><span className="text-xs font-bold">全削除</span></button>
                   </div>
                 </div>
 
