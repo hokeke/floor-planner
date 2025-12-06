@@ -506,14 +506,39 @@ const SeismicCheckPro = ({ initialData }) => {
   const handleMouseUp = (e) => {
     if (!isDrawing || tool !== 'wall') return;
     const endPos = getMousePos(e);
-    const len = Math.sqrt(Math.pow(endPos.x - startPos.x, 2) + Math.pow(endPos.y - startPos.y, 2));
-    if (len > 100) {
-      setElements([...elements, {
-        id: generateId(), type: 'wall',
-        x1: startPos.x, y1: startPos.y, x2: endPos.x, y2: endPos.y,
-        length: len, multiplier: wallMultiplier, strength: len * wallMultiplier
-      }]);
+    // Enforce 910mm unit
+    const UNIT_910 = 910;
+
+    // Calculate raw vector
+    let dx = endPos.x - startPos.x;
+    let dy = endPos.y - startPos.y;
+
+    // Determine orientation (Horizontal or Vertical)
+    if (Math.abs(dx) > Math.abs(dy)) {
+      dy = 0;
+      // Snap length to nearest 910mm unit
+      const sign = Math.sign(dx) || 1;
+      const rawLen = Math.abs(dx);
+      // Ensure strictly >= 910
+      const snappedLen = Math.max(UNIT_910, Math.round(rawLen / UNIT_910) * UNIT_910);
+      dx = sign * snappedLen;
+    } else {
+      dx = 0;
+      const sign = Math.sign(dy) || 1;
+      const rawLen = Math.abs(dy);
+      const snappedLen = Math.max(UNIT_910, Math.round(rawLen / UNIT_910) * UNIT_910);
+      dy = sign * snappedLen;
     }
+
+    const finalX = startPos.x + dx;
+    const finalY = startPos.y + dy;
+    const finalLen = Math.sqrt(dx * dx + dy * dy);
+
+    setElements([...elements, {
+      id: generateId(), type: 'wall',
+      x1: startPos.x, y1: startPos.y, x2: finalX, y2: finalY,
+      length: finalLen, multiplier: wallMultiplier, strength: finalLen * wallMultiplier
+    }]);
     setIsDrawing(false);
   };
 
@@ -621,7 +646,20 @@ const SeismicCheckPro = ({ initialData }) => {
     setIsOptimizing(true);
     setAiError(null);
 
-    const validCandidates = getValidWallSegments(jsonFloorPlan).filter(s => s.length >= 910);
+    // Filter candidates: Must be >= 910mm AND multiple of 910mm (allowing for tolerance)
+    const UNIT_910 = 910;
+    const TOLERANCE = 100; // tolerance for float/int conversion
+
+    const validCandidates = getValidWallSegments(jsonFloorPlan).filter(s => {
+      // Must be at least 910mm
+      if (s.length < UNIT_910 - TOLERANCE) return false;
+
+      // Must be roughly a multiple of 910mm
+      const remainder = s.length % UNIT_910;
+      // Check proximity to 0 or UNIT_910
+      const isMultiple = remainder < TOLERANCE || remainder > (UNIT_910 - TOLERANCE);
+      return isMultiple;
+    });
     const candidateList = validCandidates.map((s, i) => ({
       id: i, x1: Math.round(s.x1), y1: Math.round(s.y1), x2: Math.round(s.x2), y2: Math.round(s.y2), len: Math.round(s.length)
     }));
