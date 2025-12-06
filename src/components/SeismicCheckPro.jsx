@@ -621,7 +621,7 @@ const SeismicCheckPro = ({ initialData }) => {
     setIsOptimizing(true);
     setAiError(null);
 
-    const validCandidates = getValidWallSegments(jsonFloorPlan).filter(s => s.length >= 455);
+    const validCandidates = getValidWallSegments(jsonFloorPlan).filter(s => s.length >= 600);
     const candidateList = validCandidates.map((s, i) => ({
       id: i, x1: Math.round(s.x1), y1: Math.round(s.y1), x2: Math.round(s.x2), y2: Math.round(s.y2), len: Math.round(s.length)
     }));
