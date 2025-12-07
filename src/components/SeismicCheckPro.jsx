@@ -417,11 +417,28 @@ const SeismicCheckPro = ({ initialData }) => {
     const padding = 1000;
     setViewBox(`${minX - padding} ${minY - padding} ${maxX - minX + padding * 2} ${maxY - minY + padding * 2}`);
 
+    const UNIT_910 = 910;
     const validSegments = getValidWallSegments(data);
-    const newElements = validSegments.map(s => ({
-      id: generateId(), type: 'wall', x1: s.x1, y1: s.y1, x2: s.x2, y2: s.y2, length: s.length,
-      multiplier: wallMultiplier, strength: s.length * wallMultiplier
-    }));
+    const newElements = [];
+    validSegments.forEach(s => {
+      // Filter out walls shorter than 910mm
+      if (s.length < UNIT_910) return;
+
+      // Snap to 910mm multiples
+      const snappedLen = Math.floor(s.length / UNIT_910) * UNIT_910;
+      if (snappedLen < UNIT_910) return; // Should be covered by above, but safe guard
+
+      // Calculate new end point to match snapped length
+      // Assumes straight lines (either vertical or horizontal mostly, but code handles diagonal too)
+      const ratio = snappedLen / s.length;
+      const newX2 = s.x1 + (s.x2 - s.x1) * ratio;
+      const newY2 = s.y1 + (s.y2 - s.y1) * ratio;
+
+      newElements.push({
+        id: generateId(), type: 'wall', x1: s.x1, y1: s.y1, x2: newX2, y2: newY2, length: snappedLen,
+        multiplier: wallMultiplier, strength: snappedLen * wallMultiplier
+      });
+    });
     const importCols = (list) => {
       list?.forEach(obj => {
         newElements.push({ id: generateId(), type: 'column', x: obj.x, y: obj.y, strength: COLUMN_STRENGTH });
