@@ -1143,6 +1143,54 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedObjectId]);
 
+  // Handle arrow key movement for selected walls
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (!selectedWallId) return;
+
+      // Only handle arrow keys
+      if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) return;
+
+      e.preventDefault(); // Prevent page scrolling
+
+      // Move by 10mm
+      const MOVE_STEP = mmToPx(10);
+
+      setWalls(prevWalls =>
+        prevWalls.map(wall => {
+          if (wall.id !== selectedWallId) return wall;
+
+          let dx = 0;
+          let dy = 0;
+
+          switch (e.key) {
+            case 'ArrowUp':
+              dy = -MOVE_STEP;
+              break;
+            case 'ArrowDown':
+              dy = MOVE_STEP;
+              break;
+            case 'ArrowLeft':
+              dx = -MOVE_STEP;
+              break;
+            case 'ArrowRight':
+              dx = MOVE_STEP;
+              break;
+          }
+
+          return {
+            ...wall,
+            start: { x: wall.start.x + dx, y: wall.start.y + dy },
+            end: { x: wall.end.x + dx, y: wall.end.y + dy }
+          };
+        })
+      );
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedWallId]);
+
   // Handle Esc key to cancel drawing
   useEffect(() => {
     const handleKeyDown = (e) => {
